@@ -43,10 +43,10 @@ end
 
 structure TestMap = BinaryMapFn(struct type ord_key = string
   									                   val compare = String.compare
-  								              end);
+  								              end)
 
 structure TestSet = BinarySetFn(struct type ord_key = string
   									                   val compare = String.compare
-  								              end);
+  								              end)
 
-structure StringProcessor = F (TestMap) (TestSet);
+structure StringProcessor = F (TestMap) (TestSet)
