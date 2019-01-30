@@ -6,32 +6,39 @@ val linePos = ErrorMsg.linePos
 val commentDepth = ref 0
 val currString = ref ""
 val stringStartPos = ref 0
-fun err(p1,p2) = ErrorMsg.error p1
+fun err(p1,p2) = ErrorMsg.error p1 p2
 fun newLine(yypos) =
-  let
-  lineNum := !lineNum+1;
-  linePos := yypos :: !linePos;
-  in
-  ()
-  end
-fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
+    let
+        val _ = lineNum := !lineNum+1;
+        val _ = linePos := yypos :: !linePos;
+    in
+        ()
+    end
+fun eof() =
+    let
+        val pos = hd(!linePos)
+    in
+        Tokens.EOF(pos,pos)
+    end
 
 
 %%
-digit=[0-9]
-letter=[a-zA-Z]
-control=[@A-Z[\]^_]
-formattingChar=[ \012\009] (*space, formfeed, tab*)
+
+digit=[0-9];
+letter=[a-zA-Z];
+control=[@A-Z[\]^_];
+
+formattingChar=[ \012\009];
 %s COMMENT STRING FORMATTING;
-%%
 
+%%
 
 <INITIAL>"type" => (Tokens.TYPE(yypos, yypos+4));
 <INITIAL>"var" => (Tokens.VAR(yypos, yypos+3));
 <INITIAL>"function" => (Tokens.FUNCTION(yypos, yypos+8));
 <INITIAL>"break" => (Tokens.BREAK(yypos, yypos+5));
 <INITIAL>"of" => (Tokens.OF(yypos, yypos+2));
-<INITIAL><INITIAL>"end" => (Tokens.END(yypos, yypos+3));
+<INITIAL>"end" => (Tokens.END(yypos, yypos+3));
 <INITIAL>"in" => (Tokens.IN(yypos, yypos+2));
 <INITIAL>"nil" => (Tokens.NIL(yypos, yypos+3));
 <INITIAL>"let" => (Tokens.LET(yypos, yypos+3));
@@ -52,7 +59,7 @@ formattingChar=[ \012\009] (*space, formfeed, tab*)
 <INITIAL>"<" => (Tokens.LT(yypos, yypos+1));
 <INITIAL>"<>" => (Tokens.NEQ(yypos, yypos+2));
 <INITIAL>"=" => (Tokens.EQ(yypos, yypos+1));
-<INITIAL>"/" => (Tokens.DEVIDE(yypos, yypos+1));
+<INITIAL>"/" => (Tokens.DIVIDE(yypos, yypos+1));
 <INITIAL>"*" => (Tokens.TIMES(yypos, yypos+1));
 <INITIAL>"-" => (Tokens.MINUS(yypos, yypos+1));
 <INITIAL>"+" => (Tokens.PLUS(yypos, yypos+1));
@@ -69,28 +76,33 @@ formattingChar=[ \012\009] (*space, formfeed, tab*)
 <INITIAL>{digit}+ => (Tokens.INT(valOf(Int.fromString yytext), yypos, yypos+size yytext));
 <INITIAL>{letter}[{letter}{digit}_]* => (Tokens.ID(yytext, yypos, yypos+size yytext));
 
-<INITIAL>"/*" =>(commentDepth:=!commentDepth+1;yybegin COMMENT; continue());
-<COMMENT>"*/" =>(commentDepth:=!commentDepth-1;
-  if commentDepth = 0 then yybegin INITIAL
-  else if commentDepth < 0 then err(yypos, "unmatched comment terminator")
-  else ();
-  continue());
-<COMMENT>. => (continue();)
-<INITIAL>""" => (yybegin STRING; stringStartPos:= yypos; continue());
-<STRING>"\n" => (currString:=!currString^"\n"; continue());
-<STRING>"\t" => (currString:=!currString^"\t"; continue());
-<STRING>\\^{control} => (currString:=!currString^(valOf(Char.fromString yytext)); continue());
-<STRING>\\{digit}{digit}{digit} => (currString:=!currString^(valOf(Char.fromString yytext)); continue());
-<STRING>"\"" => (currString:=!currString^"\""; continue());
-<STRING>"\\" => (currString:=!currString^"\\"; continue());
+<INITIAL>"/*" =>(commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
+<COMMENT>"*/" =>(commentDepth := !commentDepth - 1;
+                 if !commentDepth = 0
+                 then
+                     YYBEGIN INITIAL
+                 else if !commentDepth < 0
+                 then
+                     err(yypos, "unmatched comment terminator")
+                 else
+                     ();
+                 continue());
+<COMMENT>. => (continue());
+<INITIAL>\034 => (YYBEGIN STRING; stringStartPos := yypos; continue());
+<STRING>"\n" => (currString := !currString ^ "\n"; continue());
+<STRING>"\t" => (currString := !currString ^ "\t"; continue());
+<STRING>\092\094{control} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
+<STRING>\\{digit}{digit}{digit} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
+<STRING>"\"" => (currString := !currString ^ "\""; continue());
+<STRING>"\\" => (currString := !currString ^ "\\"; continue());
 
-<STRING>"\" => (yybegin FORMATTING; continue());
-<FORMATTING>"\" => (yybegin STRING; continue());
+<STRING>\092 => (YYBEGIN FORMATTING; continue());
+<FORMATTING>\092 => (YYBEGIN STRING; continue());
 <FORMATTING>{formattingChar} => (continue());
 <FORMATTING>\n => (newLine(yypos); continue());
-<FORMATTING>.=> (err(yypos, "expecting white space in formatting string block"))
-<STRING>\034 => (yybegin INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos));
-<STRING>\n	=> (err(yypos, "EOL while scanning string literal"))
-<STRING>\t	=> (err(yypos, "EOL while scanning string literal"))
-. => (err(yypos, "invalid token"))
-\n	=> (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
+<FORMATTING>. => (err(yypos, "expecting white space in formatting string block"), continue());
+<STRING>\034 => (YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos); currString = ref ""; continue());
+<STRING>\n	=> (err(yypos, "EOL while scanning string literal"); continue());
+<STRING>\t	=> (err(yypos, "EOL while scanning string literal"); continue());
+. => (err(yypos, "invalid token"); continue());
+\n	=> (newLine(yypos); continue());
