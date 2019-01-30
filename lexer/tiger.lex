@@ -27,8 +27,8 @@ fun eof() =
 digit=[0-9];
 letter=[a-zA-Z];
 control=[@A-Z[\]^_];
-
 formattingChar=[ \012\009];
+whitespace=[ \012\009\n];
 %s COMMENT STRING FORMATTING;
 
 %%
@@ -49,7 +49,7 @@ formattingChar=[ \012\009];
 <INITIAL>"else" => (Tokens.ELSE(yypos, yypos+4));
 <INITIAL>"then" => (Tokens.THEN(yypos, yypos+4));
 <INITIAL>"if" => (Tokens.IF(yypos, yypos+2));
-<INITIAL>"array" => (Tokens.ARRAY(yypos, yypos+3));
+<INITIAL>"array" => (Tokens.ARRAY(yypos, yypos+5));
 <INITIAL>":=" => (Tokens.ASSIGN(yypos, yypos+2));
 <INITIAL>"|" => (Tokens.OR(yypos, yypos+1));
 <INITIAL>"&" => (Tokens.AND(yypos, yypos+1));
@@ -74,7 +74,8 @@ formattingChar=[ \012\009];
 <INITIAL>":" => (Tokens.COLON(yypos, yypos+1));
 <INITIAL>"," => (Tokens.COMMA(yypos, yypos+1));
 <INITIAL>{digit}+ => (Tokens.INT(valOf(Int.fromString yytext), yypos, yypos+size yytext));
-<INITIAL>{letter}[{letter}{digit}_]* => (Tokens.ID(yytext, yypos, yypos+size yytext));
+<INITIAL>[a-zA-Z]([a-zA-Z0-9_])* => (Tokens.ID(yytext, yypos, yypos+size yytext));
+<INITIAL>{whitespace} => (continue());
 
 <INITIAL>"/*" =>(commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
 <COMMENT>"*/" =>(commentDepth := !commentDepth - 1;
@@ -88,6 +89,7 @@ formattingChar=[ \012\009];
                      ();
                  continue());
 <COMMENT>. => (continue());
+
 <INITIAL>\034 => (YYBEGIN STRING; stringStartPos := yypos; continue());
 <STRING>"\n" => (currString := !currString ^ "\n"; continue());
 <STRING>"\t" => (currString := !currString ^ "\t"; continue());
@@ -95,14 +97,17 @@ formattingChar=[ \012\009];
 <STRING>\\{digit}{digit}{digit} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
 <STRING>"\"" => (currString := !currString ^ "\""; continue());
 <STRING>"\\" => (currString := !currString ^ "\\"; continue());
-
-<STRING>\092 => (YYBEGIN FORMATTING; continue());
-<FORMATTING>\092 => (YYBEGIN STRING; continue());
-<FORMATTING>{formattingChar} => (continue());
-<FORMATTING>\n => (newLine(yypos); continue());
-<FORMATTING>. => (err(yypos, "expecting white space in formatting string block"), continue());
 <STRING>\034 => (YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos); currString = ref ""; continue());
 <STRING>\n	=> (err(yypos, "EOL while scanning string literal"); continue());
 <STRING>\t	=> (err(yypos, "EOL while scanning string literal"); continue());
+<STRING>\092 => (YYBEGIN FORMATTING; continue());
+<STRING>. => (currString := !currString ^ yytext; continue());
+
+<FORMATTING>\092 => (YYBEGIN STRING; continue());
+<FORMATTING>{formattingChar} => (continue());
+<FORMATTING>\n => (newLine(yypos); continue());
+<FORMATTING>. => (err(yypos, "expecting white space in formatting string block"); continue());
+
+
 . => (err(yypos, "invalid token"); continue());
 \n	=> (newLine(yypos); continue());
