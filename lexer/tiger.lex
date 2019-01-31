@@ -6,11 +6,13 @@ val linePos = ErrorMsg.linePos
 val commentDepth = ref 0
 val currString = ref ""
 val stringStartPos = ref 0
+val stringOpenState = ref 0
+
 fun err(p1,p2) = ErrorMsg.error p1 p2
 fun newLine(yypos) =
     let
         val _ = lineNum := !lineNum+1;
-        val _ = print("[#line#] Incrementing line to " ^ Int.toString(!lineNum) ^ "\n")
+        (* val _ = print("[#line#] Incrementing line to " ^ Int.toString(!lineNum) ^ "\n") *)
         val _ = linePos := yypos :: !linePos;
     in
         ()
@@ -21,16 +23,23 @@ fun pr i =
     in
         ()
     end
-fun gotoState (sourceState, destState) = print("[#state#] From " ^ sourceState ^ " to " ^ destState ^ "\n")
+fun gotoState (sourceState, destState) =
+    let
+        (* val _ = print("[#state#] From " ^ sourceState ^ " to " ^ destState ^ "\n") *)
+    in
+        ()
+    end
 fun eof() =
     let
         val pos = hd(!linePos)
-        val _ = print("[#linePos#] ")
+        (* val _ = print("[#linePos#] ")
         val _ = map pr (!linePos)
-        val _ = print("\n")
+        val _ = print("\n") *)
         val _ = lineNum := 1
         val _ = linePos := [1]
     in
+        if (!commentDepth <> 0) then err(pos, "unmatched comment depth at EOF") else ();
+        if (!stringOpenState <> 0) then err(pos, "string is still open at EOF") else ();
         Tokens.EOF(pos,pos)
     end
 
@@ -42,7 +51,6 @@ control=[@A-Z[\]^_];
 formattingChar=[ \012\009];
 whitespace=[ \012\009\n];
 %s COMMENT STRING FORMATTING;
-%reject
 
 %%
 
@@ -92,7 +100,7 @@ whitespace=[ \012\009\n];
 <INITIAL>{whitespace} => (continue());
 
 <INITIAL>"/*" =>(commentDepth := !commentDepth + 1; gotoState("INITIAL", "COMMENT"); YYBEGIN COMMENT; continue());
-<INITIAL>"*/" =>(err(yypos, "error: unexpected comment terminator"); continue());
+<INITIAL>"*/" =>(err(yypos, "unexpected comment terminator"); continue());
 <COMMENT>"*/" =>(commentDepth := !commentDepth - 1;
                  if !commentDepth = 0 then
                      let
@@ -105,24 +113,23 @@ whitespace=[ \012\009\n];
 <COMMENT>\n => (newLine(yypos); continue());
 <COMMENT>. => (continue());
 
-<INITIAL>\034 => (gotoState("INITIAL", "STRING"); YYBEGIN STRING; currString := ""; stringStartPos := yypos; continue());
+<INITIAL>\034 => (gotoState("INITIAL", "STRING"); YYBEGIN STRING; currString := ""; stringStartPos := yypos; stringOpenState := 1; continue());
 <STRING>\092\110 => (currString := !currString ^ "\n"; continue());
 <STRING>\092\116 => (currString := !currString ^ "\t"; continue());
 <STRING>\092\094{control} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
 <STRING>\\{digit}{digit}{digit} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
 <STRING>\092\034 => (currString := !currString ^ "\""; continue());
 <STRING>\092\092 => (currString := !currString ^ "\\"; continue());
-<STRING>\010 => (err(yypos, "EOL while scanning string literal"); newLine(yypos); continue());
-<STRING>\009 => (err(yypos, "EOL while scanning string literal"); continue());
+<STRING>\010 => (err(yypos, "EOL while scanning string literal, string literal can't contain new line character"); newLine(yypos); continue());
+<STRING>\009 => (err(yypos, "EOL while scanning string literal, string literal can't contain tab character"); continue());
 <STRING>\092 => (gotoState("STRING", "FORMATTING"); YYBEGIN FORMATTING; continue());
-<STRING>\034 => (gotoState("STRING", "INITIAL"); YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos));
+<STRING>\034 => (gotoState("STRING", "INITIAL"); YYBEGIN INITIAL; stringOpenState := 0; Tokens.STRING(!currString, !stringStartPos, yypos));
 <STRING>. => (currString := !currString ^ yytext; continue());
 
 <FORMATTING>\092 => (gotoState("FORMATTING", "STRING"); YYBEGIN STRING; continue());
 <FORMATTING>{formattingChar} => (continue());
 <FORMATTING>\n => (newLine(yypos); continue());
-<FORMATTING>. => (err(yypos, "expecting white space in formatting string block"); continue());
+<FORMATTING>. => (err(yypos, "expecting only white space in formatting string block"); continue());
 
-
-. => (err(yypos, "invalid token"); continue());
+. => (err(yypos, "no rule matched, invalid token"); continue());
 \n	=> (newLine(yypos); continue());
