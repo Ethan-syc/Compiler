@@ -9,18 +9,26 @@ val stringStartPos = ref 0
 fun err(p1,p2) = ErrorMsg.error p1 p2
 fun newLine(yypos) =
     let
+        val _ = print("Incrementing line to " ^ Int.toString(!lineNum) ^ "\n")
         val _ = lineNum := !lineNum+1;
         val _ = linePos := yypos :: !linePos;
+    in
+        ()
+    end
+fun pr i =
+    let
+        val _ = print(Int.toString(i) ^ " ")
     in
         ()
     end
 fun eof() =
     let
         val pos = hd(!linePos)
+        val _ = print("Current line=" ^ Int.toString (!lineNum) ^ "\n")
+        val _ = map pr (!linePos)
     in
         Tokens.EOF(pos,pos)
     end
-
 
 %%
 
@@ -30,6 +38,7 @@ control=[@A-Z[\]^_];
 formattingChar=[ \012\009];
 whitespace=[ \012\009\n];
 %s COMMENT STRING FORMATTING;
+%reject
 
 %%
 
@@ -75,35 +84,37 @@ whitespace=[ \012\009\n];
 <INITIAL>"," => (Tokens.COMMA(yypos, yypos+1));
 <INITIAL>{digit}+ => (Tokens.INT(valOf(Int.fromString yytext), yypos, yypos+size yytext));
 <INITIAL>[a-zA-Z]([a-zA-Z0-9_])* => (Tokens.ID(yytext, yypos, yypos+size yytext));
+<INITIAL>\n => (newLine(yypos); continue());
 <INITIAL>{whitespace} => (continue());
 
-<INITIAL>"/*" =>(commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
+<INITIAL>"/*" =>(commentDepth := !commentDepth + 1; print("COMMENT\n"); YYBEGIN COMMENT; continue());
+<INITIAL>"*/" =>(err(yypos, "error: unexpected comment terminator"); continue());
 <COMMENT>"*/" =>(commentDepth := !commentDepth - 1;
-                 if !commentDepth = 0
-                 then
-                     YYBEGIN INITIAL
-                 else if !commentDepth < 0
-                 then
-                     err(yypos, "unmatched comment terminator")
-                 else
-                     ();
+                 if !commentDepth = 0 then
+                     let
+                         val _ = print("INITIAL\n")
+                     in
+                         YYBEGIN INITIAL
+                     end
+                 else ();
                  continue());
+<COMMENT>\n => (newLine(yypos); continue());
 <COMMENT>. => (continue());
 
-<INITIAL>\034 => (YYBEGIN STRING; stringStartPos := yypos; continue());
-<STRING>"\n" => (currString := !currString ^ "\n"; continue());
-<STRING>"\t" => (currString := !currString ^ "\t"; continue());
+<INITIAL>\034 => (print("STRING\n"); YYBEGIN STRING; currString := ""; stringStartPos := yypos; continue());
+<STRING>\092\110 => (currString := !currString ^ "\n"; continue());
+<STRING>\092\116 => (currString := !currString ^ "\t"; continue());
 <STRING>\092\094{control} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
 <STRING>\\{digit}{digit}{digit} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
-<STRING>"\"" => (currString := !currString ^ "\""; continue());
-<STRING>"\\" => (currString := !currString ^ "\\"; continue());
-<STRING>\034 => (YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos); currString = ref ""; continue());
-<STRING>\n	=> (err(yypos, "EOL while scanning string literal"); continue());
-<STRING>\t	=> (err(yypos, "EOL while scanning string literal"); continue());
-<STRING>\092 => (YYBEGIN FORMATTING; continue());
+<STRING>\092\034 => (currString := !currString ^ "\""; continue());
+<STRING>\092\092 => (currString := !currString ^ "\\"; continue());
+<STRING>\010 => (err(yypos, "EOL while scanning string literal"); newLine(yypos); continue());
+<STRING>\009 => (err(yypos, "EOL while scanning string literal"); continue());
+<STRING>\092 => (print("FORMATTING\n"); YYBEGIN FORMATTING; continue());
+<STRING>\034 => (print("INITIAL\n"); YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos));
 <STRING>. => (currString := !currString ^ yytext; continue());
 
-<FORMATTING>\092 => (YYBEGIN STRING; continue());
+<FORMATTING>\092 => (print("STRING\n"); YYBEGIN STRING; continue());
 <FORMATTING>{formattingChar} => (continue());
 <FORMATTING>\n => (newLine(yypos); continue());
 <FORMATTING>. => (err(yypos, "expecting white space in formatting string block"); continue());

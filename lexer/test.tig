@@ -1,1 +1,6 @@
-type arrtype = array of int
+"abc\n\t\^G\065\066\\\
+
+
+\def"
+
+*/
