@@ -9,8 +9,8 @@ val stringStartPos = ref 0
 fun err(p1,p2) = ErrorMsg.error p1 p2
 fun newLine(yypos) =
     let
-        val _ = print("Incrementing line to " ^ Int.toString(!lineNum) ^ "\n")
         val _ = lineNum := !lineNum+1;
+        val _ = print("[#line#] Incrementing line to " ^ Int.toString(!lineNum) ^ "\n")
         val _ = linePos := yypos :: !linePos;
     in
         ()
@@ -21,11 +21,15 @@ fun pr i =
     in
         ()
     end
+fun gotoState (sourceState, destState) = print("[#state#] From " ^ sourceState ^ " to " ^ destState ^ "\n")
 fun eof() =
     let
         val pos = hd(!linePos)
-        val _ = print("Current line=" ^ Int.toString (!lineNum) ^ "\n")
+        val _ = print("[#linePos#] ")
         val _ = map pr (!linePos)
+        val _ = print("\n")
+        val _ = lineNum := 1
+        val _ = linePos := [1]
     in
         Tokens.EOF(pos,pos)
     end
@@ -87,12 +91,12 @@ whitespace=[ \012\009\n];
 <INITIAL>\n => (newLine(yypos); continue());
 <INITIAL>{whitespace} => (continue());
 
-<INITIAL>"/*" =>(commentDepth := !commentDepth + 1; print("COMMENT\n"); YYBEGIN COMMENT; continue());
+<INITIAL>"/*" =>(commentDepth := !commentDepth + 1; gotoState("INITIAL", "COMMENT"); YYBEGIN COMMENT; continue());
 <INITIAL>"*/" =>(err(yypos, "error: unexpected comment terminator"); continue());
 <COMMENT>"*/" =>(commentDepth := !commentDepth - 1;
                  if !commentDepth = 0 then
                      let
-                         val _ = print("INITIAL\n")
+                         val _ = gotoState("COMMENT", "INITIAL")
                      in
                          YYBEGIN INITIAL
                      end
@@ -101,7 +105,7 @@ whitespace=[ \012\009\n];
 <COMMENT>\n => (newLine(yypos); continue());
 <COMMENT>. => (continue());
 
-<INITIAL>\034 => (print("STRING\n"); YYBEGIN STRING; currString := ""; stringStartPos := yypos; continue());
+<INITIAL>\034 => (gotoState("INITIAL", "STRING"); YYBEGIN STRING; currString := ""; stringStartPos := yypos; continue());
 <STRING>\092\110 => (currString := !currString ^ "\n"; continue());
 <STRING>\092\116 => (currString := !currString ^ "\t"; continue());
 <STRING>\092\094{control} => (currString := !currString ^ Char.toString (valOf(Char.fromString yytext)); continue());
@@ -110,11 +114,11 @@ whitespace=[ \012\009\n];
 <STRING>\092\092 => (currString := !currString ^ "\\"; continue());
 <STRING>\010 => (err(yypos, "EOL while scanning string literal"); newLine(yypos); continue());
 <STRING>\009 => (err(yypos, "EOL while scanning string literal"); continue());
-<STRING>\092 => (print("FORMATTING\n"); YYBEGIN FORMATTING; continue());
-<STRING>\034 => (print("INITIAL\n"); YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos));
+<STRING>\092 => (gotoState("STRING", "FORMATTING"); YYBEGIN FORMATTING; continue());
+<STRING>\034 => (gotoState("STRING", "INITIAL"); YYBEGIN INITIAL; Tokens.STRING(!currString, !stringStartPos, yypos));
 <STRING>. => (currString := !currString ^ yytext; continue());
 
-<FORMATTING>\092 => (print("STRING\n"); YYBEGIN STRING; continue());
+<FORMATTING>\092 => (gotoState("FORMATTING", "STRING"); YYBEGIN STRING; continue());
 <FORMATTING>{formattingChar} => (continue());
 <FORMATTING>\n => (newLine(yypos); continue());
 <FORMATTING>. => (err(yypos, "expecting white space in formatting string block"); continue());
