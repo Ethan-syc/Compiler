@@ -44,8 +44,16 @@ dec: tydec ()
    | vardec ()
    | fundec ()
 
-tydec: TYPE ID EQUAL ty
+tydec: TYPE ID EQUAL ty ()
 
-ty: ID
-  | LBRACE tyfields RBRACE
-           |
+ty: ID ()
+  | LBRACE tyfields RBRACE ()
+  | ARRAY OF ID ()
+
+tyfields: tyfields COMMA ID COLON ID ()
+        | ID COLON ID ()
+        | ()
+
+
+vardec: VAR ID ASSIGN exp
+            |
