@@ -10,8 +10,10 @@
   | ARRAY | IF | THEN | ELSE | WHILE | FOR | TO | DO | LET | IN | END | OF
   | BREAK | NIL
   | FUNCTION | VAR | TYPE
+  | UMINUS
 
-%nonterm  exp | program | decs | dec | tydec | vardec | fundec
+%nonterm  exp | program | decs | dec | tydec | vardec | fundec | lvalue | ty | tyfields
+  | arglist | reclist | expseq 
 
 %pos int
 %verbose
@@ -25,6 +27,20 @@
 	DO OF NIL
 
 %prefer THEN ELSE LPAREN
+%left ELSE THEN
+%nonassoc OF
+%nonassoc DO
+%nonassoc ASSIGN
+%nonassoc LBRACK
+%left OR
+%left AND
+%nonassoc EQ NEQ LT LE GT GE
+%right THEN
+%left PLUS MINUS
+%left TIMES DIVIDE
+%left SEMICOLON
+%left UMINUS
+%nonassoc LPAREN RPAREN
 
 %value ID ("bogus")
 %value INT (1)
@@ -32,19 +48,25 @@
 
 %%
 
-program	: exp				()
+program	: exp ()
 
+arglist: exp ()
+       | arglist COMMA exp ()
 
-exp: 			()
+reclist: ID EQ exp ()
+       | reclist COMMA ID EQ exp ()
+       | ()
 
-decs: decs dec ()
-    | dec ()
+expseq: exp SEMICOLON exp ()
 
 dec: tydec ()
    | vardec ()
    | fundec ()
 
-tydec: TYPE ID EQUAL ty ()
+decs: decs dec ()
+    | dec ()
+
+tydec: TYPE ID EQ ty ()
 
 ty: ID ()
   | LBRACE tyfields RBRACE ()
@@ -55,5 +77,45 @@ tyfields: tyfields COMMA ID COLON ID ()
         | ()
 
 
-vardec: VAR ID ASSIGN exp
-            |
+vardec: VAR ID ASSIGN exp ()
+      | VAR ID COLON ID ASSIGN exp ()
+
+fundec: FUNCTION ID LPAREN tyfields RPAREN EQ exp ()
+      | FUNCTION ID LPAREN tyfields RPAREN COLON ID EQ exp ()
+
+lvalue: ID ()
+      | lvalue DOT ID ()
+      | lvalue LBRACK exp RBRACK ()
+
+exp: lvalue ()
+   | NIL ()
+   | expseq ()
+   | LPAREN RPAREN ()
+   | INT ()
+   | STRING ()
+   | MINUS exp  %prec UMINUS ()
+   | ID LPAREN RPAREN ()
+   | ID LPAREN exp RPAREN ()
+   | ID LPAREN arglist RPAREN ()
+   | exp AND exp ()
+   | exp OR exp ()
+   | exp GE exp ()
+   | exp GT exp ()
+   | exp LE exp ()
+   | exp LT exp ()
+   | exp NEQ exp ()
+   | exp EQ exp ()
+   | exp DIVIDE exp ()
+   | exp TIMES exp ()
+   | exp MINUS exp ()
+   | exp PLUS exp ()
+   | ID LBRACE reclist RBRACE ()
+   | ID LBRACK exp RBRACK OF exp ()
+   | lvalue ASSIGN exp ()
+   | IF exp THEN exp ELSE exp ()
+   | IF exp THEN exp ()
+   | WHILE exp DO exp ()
+   | FOR ID ASSIGN exp TO exp DO exp ()
+   | BREAK ()
+   | LET decs IN exp END ()
+   | LPAREN exp RPAREN ()
