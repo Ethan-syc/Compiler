@@ -1,4 +1,1 @@
-"abc\n\t\^G\065\066\\\
-
-
-\def"
+/* arr1 is /*valid since*/ expression 0 is int = myint */
