@@ -1,8 +1,12 @@
 Group is
 
-tiger.lex
+absyn.sml
 errormsg.sml
-parsetest.sml
+table.sig
+table.sml
+symbol.sml
+parse.sml
+tiger.lex
 tiger.grm
 $/basis.cm
 $/smlnj-lib.cm
