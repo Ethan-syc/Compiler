@@ -1,1 +1,5 @@
-f(1)
+let
+var a:=3
+in
+f();g()
+end
