@@ -11,7 +11,7 @@ Book: Modern Compiler Implementation in ML ©1998 by Andrew W. Appel
 | Phase | Due | Finished |
 |:---:|:---:|:---:|
 |Lexical Analysis |1/31|:white_check_mark:|
-|Parsing |2/14|:cold_sweat:|
+|Parsing |2/14|:white_check_mark:|
 |Semantic Analysis |3/7|:cold_sweat:|
 |Frame Analysis and Intermediate Representation |3/21|:cold_sweat:|
 |Instruction Selection |3/28|:cold_sweat:|
