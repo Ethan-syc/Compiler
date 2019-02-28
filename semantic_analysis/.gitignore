@@ -1,0 +1,13 @@
+.cm/
+*.lex.sml
+*.grm.*
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
