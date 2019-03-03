@@ -1,1 +1,11 @@
-1+"a"
+/*
+type rec1 = {a: int, b: string}
+type rec2 = {c: rec1, d: int}
+type rec3 = {e: rec2, f: string}
+
+var x: rec2 = {...}
+var y: rec3 = {...}
+var z: array of int = [...]
+var p: array of array of int = [...]
+*/
+p[z[3]]["abc"] + 4
