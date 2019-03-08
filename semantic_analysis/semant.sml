@@ -88,6 +88,11 @@ and doCheckSameType (ty1, ty2, pos) =
                            | TY.NIL => ()
                            | TY.BOTTOM => ()
                            | _ => err(pos, "Expected RECORD type."))
+              | TY.NIL =>
+                (case ty2 of TY.RECORD _ => ()
+                           | TY.NIL => ()
+                           | TY.BOTTOM => ()
+                           | _ => err(pos, "Expected NIL type."))
               | TY.INT =>
                 (case ty2 of TY.INT => ()
                            | TY.BOTTOM => ()
@@ -102,11 +107,12 @@ and doCheckSameType (ty1, ty2, pos) =
                              if ty1Unique = ty2Unique
                              then()
                              else err(pos, "ARRAY types mismatch")
-                           | TY.BOTTOM => ())
+                           | TY.BOTTOM => ()
+                           | _ => err(pos, "Expected ARRAY type."))
+              | TY.NAME _ => () (* todo *)
               | TY.UNIT =>
                 (case ty2 of TY.RECORD(_) => ()
                            | _ => err(pos, "Expected RECORD type."))
-fun transVar (venv:venvType, tenv:tenvType, var:A.var):expty = {exp=(), ty=TY.NIL}
 
 fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
     let
@@ -135,6 +141,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             in
                 transExp(venv', tenv', body)
             end
+          | trexp _ = {exp=(), ty=TY.BOTTOM}
         and trvar (A.SimpleVar(symbol, pos)) = checkSimpleVar venv (symbol, pos)
           | trvar (A.FieldVar(var, symbol, pos)) = checkFieldVar venv tenv (var, symbol, pos)
           | trvar (A.SubscriptVar(var, exp, pos)) =
@@ -176,6 +183,7 @@ and transDec (venv, tenv, dec) =
                                 end
 
                 end
+             | _ => {venv=venv, tenv=tenv} (* remove when finish all *)
 fun transTy (tenv:venvType, ty:A.ty):TY.ty = TY.NIL
 
 fun transProg (AST_expression:A.exp) =
