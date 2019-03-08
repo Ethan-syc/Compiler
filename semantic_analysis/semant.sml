@@ -77,22 +77,35 @@ and checkSubscriptVar venv tenv (var, exp, pos) =
                                         | _ => (err(pos, "Expected ARRAY"); {exp=(), ty=TY.BOTTOM})
                 end
 
-fun checkSameType ({exp=_,ty=TY.RECORD (_, leftUnique)}, {exp=_,ty=TY.RECORD (_, rightUnique)}, pos) =
-    if leftUnique = rightUnique
-    then ()
-    else err(pos, "RECORD TYPE mismatch")
-  | checkSameType ({exp=_,ty=TY.BOTTOM}, _, _) = ()
-  | checkSameType (_, {exp=_,ty=TY.BOTTOM}, _) = ()
-  | checkSameType ({exp=_,ty=TY.NIL}, {exp=_,ty=TY.RECORD (_, leftUnique)}, pos) = ()
-  | checkSameType ({exp=_,ty=TY.RECORD (_, leftUnique)}, {exp=_,ty=TY.NIL}, pos) = ()
-  | checkSameType ({exp=_,ty=TY.INT}, {exp=_,ty=TY.INT}, pos) = ()
-  | checkSameType ({exp=_,ty=TY.STRING}, {exp=_,ty=TY.STRING}, pos) = ()
-  | checkSameType ({exp=_,ty=TY.ARRAY (_, leftUnique)}, {exp=_,ty=TY.ARRAY (_, rightUnique)}, pos) =
-    if leftUnique = rightUnique
-    then ()
-    else err(pos, "ARRAY TYPE mismatch")
-  | checkSameType (_, _, pos) = err(pos, "TYPE mismatch")
-
+fun checkSameType ({exp=_, ty=ty1}, {exp=_, ty=ty2}, pos) = doCheckSameType(ty1, ty2, pos)
+and doCheckSameType (ty1, ty2, pos) =
+    (* Checks whether ty1 and ty2 are compatible *)
+    case ty1 of TY.RECORD(_, ty1Unique) =>
+                (case ty2 of TY.RECORD(_, ty2Unique) =>
+                             if ty1Unique = ty2Unique
+                             then ()
+                             else err(pos, "RECORD types mismatch")
+                           | TY.NIL => ()
+                           | TY.BOTTOM => ()
+                           | _ => err(pos, "Expected RECORD type."))
+              | TY.INT =>
+                (case ty2 of TY.INT => ()
+                           | TY.BOTTOM => ()
+                           | _ => err(pos, "Expected INT type."))
+              | TY.STRING =>
+                (case ty2 of TY.STRING => ()
+                           | TY.BOTTOM => ()
+                           | _ => err(pos, "Expected STRING type."))
+              | TY.BOTTOM => ()
+              | TY.ARRAY(_, ty1Unique) =>
+                (case ty2 of TY.ARRAY(_, ty2Unique) =>
+                             if ty1Unique = ty2Unique
+                             then()
+                             else err(pos, "ARRAY types mismatch")
+                           | TY.BOTTOM => ())
+              | TY.UNIT =>
+                (case ty2 of TY.RECORD(_) => ()
+                           | _ => err(pos, "Expected RECORD type."))
 fun transVar (venv:venvType, tenv:tenvType, var:A.var):expty = {exp=(), ty=TY.NIL}
 
 fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
@@ -116,7 +129,12 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             else (* oper = EqOp orelse oper = NeqOp *)
                 (checkSameType(trexp(leftExp), trexp(rightExp), pos);
                  {exp=(), ty=TY.INT})
-          | trexp (A.VarExp exp) = trvar(exp)
+          | trexp (A.VarExp var) = trvar(var)
+          | trexp (A.LetExp {decs, body, pos}) =
+            let val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs)
+            in
+                transExp(venv', tenv', body)
+            end
         and trvar (A.SimpleVar(symbol, pos)) = checkSimpleVar venv (symbol, pos)
           | trvar (A.FieldVar(var, symbol, pos)) = checkFieldVar venv tenv (var, symbol, pos)
           | trvar (A.SubscriptVar(var, exp, pos)) =
@@ -128,10 +146,37 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
     in
         trexp(exp)
     end
+and transDecs(venv, tenv, decs) =
+    foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec)) {venv=venv, tenv=tenv} decs
+and transDec (venv, tenv, dec) =
+    case dec of A.VarDec {name=name, typ=typ, init=init, ...} =>
+                let
+                    val {exp=_, ty=initType} = transExp(venv, tenv, init)
+                in
+                    case typ of NONE =>
+                                (* If a variable type is not specified, simply take whatever type the
+                                   expression returns and enter it into venv as a VarEntry *)
+                                {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=initType})}
+                              | SOME(symbol, pos) =>
+                                (* If a variable type is specified, first check the type of the init exp.
+                                   If init exp returns NIL, then check if symbol represents a RECORD.
+                                   Otherwise, check if symbol names the type returned by init exp *)
+                                let
+                                    val symbolTy = S.look(tenv, symbol)
+                                in
+                                    case symbolTy of SOME(symbolType) =>
+                                                     let
+                                                         val _ = doCheckSameType(symbolType, initType, pos)
+                                                     in
+                                                         {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=symbolType})}
+                                                     end
+                                                   | NONE =>
+                                                     (err(pos, "Type " ^ S.name symbol ^ " is not found");
+                                                      {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM})})
+                                end
 
-fun transDec (venv:venvType, tenv:tenvType, dec:A.dec):{venv:venvType, tenv:tenvType} = {venv=venv, tenv=tenv}
-
-fun tranTy (tenv:venvType, ty:A.ty):TY.ty = TY.NIL
+                end
+fun transTy (tenv:venvType, ty:A.ty):TY.ty = TY.NIL
 
 fun transProg (AST_expression:A.exp) =
     let
