@@ -113,7 +113,7 @@ and doCheckSameType (ty1, ty2, pos) =
                 (case ty2 of TY.UNIT => ()
                            | TY.BOTTOM => ()
                            | _ => err(pos, "Expected RECORD type."))
-
+              | _ => ()
 fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
     let
         fun trexp(A.NilExp) = {exp=(), ty=TY.NIL}
@@ -202,6 +202,8 @@ and transDec (venv, tenv, dec) =
                         in
                             {venv=venv', tenv=tenv}
                         end
+                      | checkFunctionDec ({name, params, body: A.exp, pos, result=NONE}, {venv: venvType, tenv: tenvType}) =
+                        {venv=venv, tenv=tenv}
                 in
                     foldl checkFunctionDec {venv=venv, tenv=tenv} decs
                 end
@@ -231,7 +233,6 @@ and transDec (venv, tenv, dec) =
                 in
                     foldl checkTypeDec {venv=venv, tenv=tenv} decs
                 end
-             | _ => {venv=venv, tenv=tenv} (* remove when finish all *)
 fun transTy (tenv:venvType, ty:A.ty):TY.ty = TY.NIL
 
 fun transProg (AST_expression:A.exp) =

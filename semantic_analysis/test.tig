@@ -9,9 +9,8 @@ var z: array of int = [...]
 var p: array of array of int = [...]
 */
 let
-  type a = int
-  type b = array of int
-  type c = {x: int, y: string}
+	type  arrtype = array of int
+	var arr1:arrtype := arrtype [10] of 0
 in
-  ()
+	arr1
 end
