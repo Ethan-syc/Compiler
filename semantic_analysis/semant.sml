@@ -141,6 +141,11 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             in
                 transExp(venv', tenv', body)
             end
+
+          | trexp (A.SeqExp []) = {exp=(), ty=TY.UNIT}
+          | trexp (A.SeqExp [(exp, pos)]) = trexp(exp)
+          | trexp (A.SeqExp ((exp:A.exp, pos:Absyn.pos)::left)) = (trexp(exp);trexp(A.SeqExp left))
+
           | trexp _ = {exp=(), ty=TY.BOTTOM}
         and trvar (A.SimpleVar(symbol, pos)) = checkSimpleVar venv (symbol, pos)
           | trvar (A.FieldVar(var, symbol, pos)) = checkFieldVar venv tenv (var, symbol, pos)
@@ -150,6 +155,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             in
                 checkSubscriptVar venv tenv (var, exp, pos)
             end
+
     in
         trexp(exp)
     end
