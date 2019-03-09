@@ -10,6 +10,7 @@ datatype ty =
          | STRING
          | BOTTOM
          | ARRAY of ty * unique
-	 | NAME of Symbol.symbol * ty option ref
+	 (* | NAME of Symbol.symbol * ty option ref *)
+         | PENDING of unit -> ty
        | UNIT
 end

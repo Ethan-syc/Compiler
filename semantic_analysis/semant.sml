@@ -109,9 +109,9 @@ and doCheckSameType (ty1, ty2, pos) =
                              else err(pos, "ARRAY types mismatch")
                            | TY.BOTTOM => ()
                            | _ => err(pos, "Expected ARRAY type."))
-              | TY.NAME _ => () (* todo *)
               | TY.UNIT =>
-                (case ty2 of TY.RECORD(_) => ()
+                (case ty2 of TY.UNIT => ()
+                           | TY.BOTTOM => ()
                            | _ => err(pos, "Expected RECORD type."))
 
 fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
@@ -153,7 +153,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
     in
         trexp(exp)
     end
-and transDecs(venv, tenv, decs) =
+and transDecs(venv: venvType, tenv: tenvType, decs: A.dec list) =
     foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec)) {venv=venv, tenv=tenv} decs
 and transDec (venv, tenv, dec) =
     case dec of A.VarDec {name=name, typ=typ, init=init, ...} =>
@@ -182,6 +182,54 @@ and transDec (venv, tenv, dec) =
                                                       {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM})})
                                 end
 
+                end
+              | A.FunctionDec (decs) =>
+                let
+                    fun transParam {name, typ, pos, escape} =
+                        case S.look(tenv, typ) of SOME t => {name=name, ty=t}
+                                                | NONE =>
+                                                  (err(pos, "Type " ^ S.name typ ^ " not found"); {name=name, ty=TY.BOTTOM})
+                    fun enterParam ({name, ty}, venv) = S.enter(venv, name, E.VarEntry{ty=ty})
+                    fun checkFunctionDec ({name, params, body: A.exp, pos, result=SOME(rt, _)}, {venv: venvType, tenv: tenvType}) =
+                        let
+                            val result_ty = case S.look(tenv, rt) of SOME(ty) => ty
+                                                                   | NONE => (err(pos, "Type " ^ S.name rt ^ " not found"); TY.BOTTOM)
+                            val params' = map transParam params
+                            val venv' = S.enter(venv, name, E.FunEntry{formals=map #ty params', result=result_ty})
+                            val venv'' = foldl enterParam venv' params'
+                            val actual_rt = transExp(venv'', tenv, body);
+                            val _ = doCheckSameType(result_ty, #ty actual_rt, pos)
+                        in
+                            {venv=venv', tenv=tenv}
+                        end
+                in
+                    foldl checkFunctionDec {venv=venv, tenv=tenv} decs
+                end
+              | A.TypeDec decs =>
+                let
+                    fun checkTypeDec ({name, ty, pos}, {venv=venv, tenv=tenv}): {venv: venvType, tenv: tenvType} =
+                        case ty of A.NameTy(symbol, _) =>
+                                   (case S.look(tenv, symbol) of SOME(ty) => {venv=venv, tenv=S.enter(tenv, name, ty)}
+                                                              | NONE =>
+                                                                (err(pos, "Type " ^ S.name symbol ^ " not found");
+                                                                 {venv=venv, tenv=S.enter(tenv, name, TY.BOTTOM)}))
+                                 | A.ArrayTy(symbol, _) =>
+                                   (case S.look(tenv, symbol) of SOME(ty) => {venv=venv, tenv=S.enter(tenv, name, TY.ARRAY(ty, ref ()))}
+                                                               | NONE =>
+                                                                 (err(pos, "Type " ^ S.name symbol ^ " not found");
+                                                                  {venv=venv, tenv=S.enter(tenv, name, TY.ARRAY(TY.BOTTOM, ref()))}))
+                                 | A.RecordTy fields =>
+                                   let
+                                       fun checkField {name, escape, typ, pos} =
+                                           case S.look(tenv, typ) of SOME(ty) => (name, ty)
+                                                                   | NONE =>
+                                                                     (err(pos, "Type " ^ S.name typ ^ " not found");
+                                                                      (name, TY.BOTTOM))
+                                   in
+                                       {venv=venv, tenv=S.enter(tenv, name, TY.RECORD(map checkField fields, ref ()))}
+                                   end
+                in
+                    foldl checkTypeDec {venv=venv, tenv=tenv} decs
                 end
              | _ => {venv=venv, tenv=tenv} (* remove when finish all *)
 fun transTy (tenv:venvType, ty:A.ty):TY.ty = TY.NIL

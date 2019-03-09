@@ -8,4 +8,10 @@ var y: rec3 = {...}
 var z: array of int = [...]
 var p: array of array of int = [...]
 */
-p[z[3]]["abc"] + 4
+let
+  type a = int
+  type b = array of int
+  type c = {x: int, y: string}
+in
+  ()
+end
