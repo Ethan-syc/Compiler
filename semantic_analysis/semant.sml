@@ -146,6 +146,15 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
           | trexp (A.SeqExp [(exp, pos)]) = trexp(exp)
           | trexp (A.SeqExp ((exp:A.exp, pos:Absyn.pos)::left)) = (trexp(exp);trexp(A.SeqExp left))
 
+          | trexp (A.AssignExp {var, exp, pos}) =
+            let
+              val varTy = trvar (var)
+              val expTy = trexp(exp)
+              val _ = checkSameType(varTy, expTy, pos)
+            in
+              {exp=(), ty=TY.UNIT}
+            end
+
           | trexp _ = {exp=(), ty=TY.BOTTOM}
         and trvar (A.SimpleVar(symbol, pos)) = checkSimpleVar venv (symbol, pos)
           | trvar (A.FieldVar(var, symbol, pos)) = checkFieldVar venv tenv (var, symbol, pos)
