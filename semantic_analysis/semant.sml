@@ -11,48 +11,80 @@ type venvType = E.enventry S.table
 type tenvType = E.ty S.table
 type expty = {exp:TR.exp, ty:TY.ty}
 
+structure Set = BinarySetFn(struct type ord_key = S.symbol
+                                   val compare = fn(a, b) => String.compare(S.name a, S.name b)
+                            end)
+
 fun err(pos,message) = ErrorMsg.error pos message
 
 fun errAndBottom(pos, message) = (err(pos, message); {exp=(), ty=TY.BOTTOM})
 
+(* TODO: Change this to false to suppress all messages *)
+fun debug(message) = if true then print("DEBUG: " ^ message) else ()
+
+fun actualTy symbol =
+    let
+        val visited = Set.singleton symbol
+    in
+        fn (tenv, pos) =>
+           case S.look(tenv, symbol)
+            of SOME(ty) =>
+               (case ty of TY.PENDING(func) => func(tenv, pos)
+                         | _ => ty)
+             | NONE =>
+               (err(pos, "Type " ^ S.name symbol ^ " does not exist"); TY.BOTTOM)
+    end
 fun checkIsLoopVariable (var, venv, pos) =
-  case var of A.SimpleVar(varname, varpos) =>
-            (case (S.look(venv, varname)) of SOME(E.VarEntry {ty, loopVar}) => loopVar
-                                          | _ => false)
-            | _ => false
+    case var of A.SimpleVar(varname, varpos) =>
+                (case (S.look(venv, varname)) of SOME(E.VarEntry {ty, loopVar}) => loopVar
+                                               | _ => false)
+              | _ => false
 
 (* check if the record has the symbol field, return the symbol type, return BOTTOM if not found *)
-fun checkRecord (symbol, pos, l) =
+fun checkRecord (symbol, pos, l, tenv) =
     case l of [] => (err(pos, (S.name symbol) ^ " not found in record"); TY.BOTTOM)
             | ((s, ty)::rest) =>
               let
                   val symbolname = S.name symbol
               in
-                  if S.name s = symbolname then ty else checkRecord(symbol, pos, rest)
+                  if S.name s = symbolname then
+                      case ty of TY.PENDING(func) => func(tenv, pos)
+                               | ty => ty
+                  else checkRecord(symbol, pos, rest, tenv)
               end
 
 (* check the type of the provided simpleVar, return expty *)
-fun checkSimpleVar venv (symbol, pos) =
+fun checkSimpleVar venv tenv (symbol, pos) =
     let
-        val _ = print("SimpleVar: " ^ S.name symbol ^ "\n")
+        val _ = debug("SimpleVar: " ^ S.name symbol ^ "\n")
     in
-        case S.look(venv, symbol) of SOME(E.VarEntry ty) => {exp=(), ty=(#ty ty)}
-                                   | _ => (err(pos, S.name symbol ^ " not declared or not a variable"); {exp=(), ty=TY.BOTTOM})
+        case S.look(venv, symbol)
+         of SOME(E.VarEntry entry) =>
+            let
+
+                val ty = #ty entry
+            in
+                (case ty of TY.PENDING(func) => {exp=(), ty=func(tenv, pos)}
+                          | _ => {exp=(), ty=ty})
+            end
+          | _ => errAndBottom(pos, S.name symbol ^ " not declared or not a variable")
     end
 
 (* check the type of the provided fieldVar, return expty *)
 and checkFieldVar venv tenv (var, symbol, pos) =
     let
-        val _ = print("FieldVar: " ^ S.name symbol ^ "\n")
+        val _ = debug("FieldVar: " ^ S.name symbol ^ "\n")
     in
         (* the most simple case, var is simpleVar, type of simpleVar should be TY.RECORD if correct *)
         case var of A.SimpleVar(varname, varpos) =>
-                    let
-                        val ty = checkSimpleVar venv (varname, varpos)
+        let
+                        val ty = checkSimpleVar venv tenv (varname, varpos)
                     in
                         case (#ty ty) of TY.RECORD (tylist, _) =>
                                          let
-                                             val innerType = checkRecord(symbol, pos, tylist)
+                                             val innerType = case checkRecord(symbol, pos, tylist, tenv)
+                                                              of TY.PENDING(func) => func(tenv, pos)
+                                                               | ty => ty
                                          in
                                              {exp=(), ty=innerType}
                                          end
@@ -61,9 +93,9 @@ and checkFieldVar venv tenv (var, symbol, pos) =
                   (* nested FieldVar, recurse *)
                   | A.FieldVar (var', symbol', pos') =>
                     let
-                        val innerType = checkFieldVar venv tenv (var', symbol', pos')
+                        val innerType = #ty (checkFieldVar venv tenv (var', symbol', pos'))
                     in
-                        case #ty innerType of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist)}
+                        case innerType of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)}
                                             | _ => (err(pos, "Inner type is not a RECORD"); {exp=(), ty=TY.BOTTOM})
                     end
                   (* nested SubscriptVar, recurse *)
@@ -71,7 +103,7 @@ and checkFieldVar venv tenv (var, symbol, pos) =
                     let
                         val innerType = checkSubscriptVar venv tenv (var', exp', pos')
                     in
-                        case #ty innerType of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist)}
+                        case #ty innerType of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)}
                                             | _ => (err(pos, "Inner type is not a RECORD"); {exp=(), ty=TY.BOTTOM})
                     end
     end
@@ -80,10 +112,12 @@ and checkFieldVar venv tenv (var, symbol, pos) =
 and checkSubscriptVar venv tenv (var, exp, pos) =
     case var of A.SimpleVar(varname, varpos) =>
                 let
-                    val ty = checkSimpleVar venv (varname, varpos)
+                    val ty = case #ty (checkSimpleVar venv tenv (varname, varpos))
+                              of TY.PENDING(func) => func(tenv, pos)
+                               | ty => ty
                 in
-                    case #ty ty of TY.ARRAY (arrty, _) => {exp=(), ty=arrty}
-                                 | _ => (err(pos, S.name varname ^ "is not an ARRAY"); {exp=(), ty=TY.BOTTOM})
+                    case ty of TY.ARRAY (arrty, _) => {exp=(), ty=arrty}
+                             | _ => (err(pos, S.name varname ^ "is not an ARRAY"); {exp=(), ty=TY.BOTTOM})
                 end
               | A.FieldVar (var', symbol', pos') =>
                 let
@@ -110,7 +144,7 @@ fun doCheckSameType (ty1, ty2, pos) =
                              else (err(pos, "RECORD types mismatch"); false)
                            | TY.NIL => true
                            | TY.BOTTOM => true
-                           | _ => (err(pos, "Expected RECORD type."); false))
+                           | _ => (err(pos, "Expected RECORD type or NIL."); false))
               | TY.NIL =>
                 (case ty2 of TY.BOTTOM => true
                            | _ => (err(pos, "Expected NIL type."); false))
@@ -133,8 +167,8 @@ fun doCheckSameType (ty1, ty2, pos) =
               | TY.UNIT =>
                 (case ty2 of TY.UNIT => true
                            | TY.BOTTOM => true
-                           | _ => (err(pos, "Expected RECORD type."); false))
-              | _ => false
+                           | _ => (err(pos, "Expected UNIT type."); false))
+              | TY.PENDING(_) => (debug("Compiler error: pending not resolved\n"); false)
 
 (* check if ty is INT, return bool *)
 fun checkInt ({exp,ty},pos) = doCheckSameType(TY.INT, ty, pos)
@@ -178,9 +212,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                 val expTy = trexp(exp)
                 val _ = checkSameType(varTy, expTy, pos)
             in
-              if isLoopVaribale
-              then errAndBottom(pos, "can't assign to loop varibale")
-              else {exp=(), ty=TY.UNIT}
+                if isLoopVaribale
+                then errAndBottom(pos, "can't assign to loop varibale")
+                else {exp=(), ty=TY.UNIT}
             end
           | trexp (A.IfExp {test, then', else', pos}) =
             let
@@ -237,6 +271,8 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                                               then err(pos, S.name actualSymbol ^ " is not declared as a parameter")
                                               else ())
                                      val actualType = #ty (trexp(exp))
+                                     val defType = case defType of TY.PENDING(func) => func(tenv, pos)
+                                                                 | ty => ty
                                      val _ = doCheckSameType(defType, actualType, pos)
                                  in
                                      ()
@@ -269,15 +305,15 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
 
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}) =
             let
-              val newVenv = S.enter(venv, var, E.VarEntry{ty=TY.INT, loopVar=true})
-              val _ = doCheckSameType(TY.INT, #ty (trexp(lo)), pos)
-              val _ = doCheckSameType(TY.INT, #ty (trexp(hi)), pos)
-              val bodyTy = #ty (transExp(newVenv, tenv, body))
-              val isNoValue = doCheckSameType(TY.UNIT, bodyTy, pos)
+                val newVenv = S.enter(venv, var, E.VarEntry{ty=TY.INT, loopVar=true})
+                val _ = doCheckSameType(TY.INT, #ty (trexp(lo)), pos)
+                val _ = doCheckSameType(TY.INT, #ty (trexp(hi)), pos)
+                val bodyTy = #ty (transExp(newVenv, tenv, body))
+                val isNoValue = doCheckSameType(TY.UNIT, bodyTy, pos)
             in
-              if isNoValue
-              then {exp=(), ty=TY.UNIT}
-              else errAndBottom(pos, "for body must produce no value")
+                if isNoValue
+                then {exp=(), ty=TY.UNIT}
+                else errAndBottom(pos, "for body must produce no value")
             end
           | trexp (A.ArrayExp {typ, size, init, pos}) =
             if not (doCheckSameType(TY.INT, #ty (trexp size), pos))
@@ -298,7 +334,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
           | trexp _ = {exp=(), ty=TY.BOTTOM}
 
         (* get the type of provided var, return expty *)
-        and trvar (A.SimpleVar(symbol, pos)) = checkSimpleVar venv (symbol, pos)
+        and trvar (A.SimpleVar(symbol, pos)) = checkSimpleVar venv tenv (symbol, pos)
           | trvar (A.FieldVar(var, symbol, pos)) = checkFieldVar venv tenv (var, symbol, pos)
           | trvar (A.SubscriptVar(var, exp, pos)) =
             let
@@ -350,52 +386,95 @@ and transDec (venv, tenv, dec) =
                                                 | NONE =>
                                                   (err(pos, "Type " ^ S.name typ ^ " not found"); {name=name, ty=TY.BOTTOM})
                     fun enterParam ({name, ty}, venv) = S.enter(venv, name, E.VarEntry{ty=ty, loopVar=false})
-                    fun checkFunctionDec ({name, params, body: A.exp, pos, result=SOME(rt, _)}, {venv: venvType, tenv: tenvType}) =
+                    fun checkFunctionHeader ({name, params, body, pos, result}, venv) =
                         let
-                            val result_ty = case S.look(tenv, rt) of SOME(ty) => ty
-                                                                   | NONE => (err(pos, "Type " ^ S.name rt ^ " not found"); TY.BOTTOM)
+                            val params' = map #ty (map transParam params)
+                            (* If a return type is specified, it must exist. Otherwise, it's a procedure
+                               returning TY.UNIT *)
+                            val result_ty = case result
+                             of SOME(rt, _) =>
+                                (case S.look(tenv, rt) of SOME(ty) => ty
+                                                        | NONE => (err(pos, "Type " ^ S.name rt ^ " not found"); TY.BOTTOM))
+                              | NONE => TY.UNIT
+                        in
+                            S.enter(venv, name, E.FunEntry{formals=params', result=result_ty})
+                        end
+                    fun checkFunctionDec ({name, params, body: A.exp, pos, result}, {venv: venvType, tenv: tenvType}) =
+                        let
+                            (* We are guaranteed to have this symbol in venv because checkFunctionHeader
+                               will have been run *)
+                            val entry = valOf (S.look(venv, name))
+                            val result_ty = case entry of E.FunEntry{formals, result} => result
+                                                        | _ => (debug("Compiler error: "
+                                                                      ^ S.name name
+                                                                      ^ " is not a FunEntry in venv");
+                                                                TY.BOTTOM)
                             val params' = map transParam params
-                            val venv' = S.enter(venv, name, E.FunEntry{formals=map #ty params', result=result_ty})
-                            val venv'' = foldl enterParam venv' params'
-                            val actual_rt = transExp(venv'', tenv, body);
+                            val venv' = foldl enterParam venv params'
+                            val actual_rt = transExp(venv', tenv, body);
                             val _ = doCheckSameType(result_ty, #ty actual_rt, pos)
                         in
                             {venv=venv', tenv=tenv}
                         end
-                      | checkFunctionDec ({name, params, body: A.exp, pos, result=NONE}, {venv: venvType, tenv: tenvType}) =
+                    fun checkFunctionNames (funcDec: A.fundec, existingNames) =
                         let
-                          val bodyTy = #ty (transExp(venv, tenv, body))
+                            val name = #name funcDec
+                            val pos = #pos funcDec
                         in
-                          if (doCheckSameType(TY.UNIT, bodyTy, pos))
-                          then {venv=venv, tenv=tenv}
-                          else (err(pos, "procedure's body must return unit"); {venv=venv, tenv=tenv})
+                            if Set.member(existingNames, name)
+                            then (err(pos, "Function with name "
+                                           ^ S.name name
+                                           ^ " already exists in this mutually recursive function group");
+                                  existingNames)
+                            else Set.add(existingNames, name)
                         end
+                    val _ = foldl checkFunctionNames Set.empty decs
+                    val venv' = foldl checkFunctionHeader venv decs
                 in
-                    foldl checkFunctionDec {venv=venv, tenv=tenv} decs
+                    foldl checkFunctionDec {venv=venv', tenv=tenv} decs
                 end
               | A.TypeDec decs =>
                 let
                     fun checkTypeDec ({name, ty, pos}, {venv=venv, tenv=tenv}): {venv: venvType, tenv: tenvType} =
-                        case ty of A.NameTy(symbol, _) =>
-                                   (case S.look(tenv, symbol) of SOME(ty) => {venv=venv, tenv=S.enter(tenv, name, ty)}
-                                                               | NONE =>
-                                                                 (err(pos, "Type " ^ S.name symbol ^ " not found");
-                                                                  {venv=venv, tenv=S.enter(tenv, name, TY.BOTTOM)}))
-                                 | A.ArrayTy(symbol, _) =>
-                                   (case S.look(tenv, symbol) of SOME(ty) => {venv=venv, tenv=S.enter(tenv, name, TY.ARRAY(ty, ref ()))}
-                                                               | NONE =>
-                                                                 (err(pos, "Type " ^ S.name symbol ^ " not found");
-                                                                  {venv=venv, tenv=S.enter(tenv, name, TY.ARRAY(TY.BOTTOM, ref()))}))
-                                 | A.RecordTy fields =>
-                                   let
-                                       fun checkField {name, escape, typ, pos} =
-                                           case S.look(tenv, typ) of SOME(ty) => (name, ty)
-                                                                   | NONE =>
-                                                                     (err(pos, "Type " ^ S.name typ ^ " not found");
-                                                                      (name, TY.BOTTOM))
-                                   in
-                                       {venv=venv, tenv=S.enter(tenv, name, TY.RECORD(map checkField fields, ref ()))}
-                                   end
+                        case ty
+                         of A.NameTy(symbol, _) =>
+                            (case S.look(tenv, symbol)
+                              of SOME(ty) => {venv=venv, tenv=S.enter(tenv, name, ty)}
+                               | NONE =>
+                                 let
+                                     val ty = TY.PENDING(actualTy symbol)
+                                 in
+                                     {venv=venv, tenv=S.enter(tenv, symbol, ty)}
+                                 end)
+                          | A.ArrayTy(symbol, _) =>
+                            (case S.look(tenv, symbol) of SOME(ty) => {venv=venv, tenv=S.enter(tenv, name, TY.ARRAY(ty, ref ()))}
+                                                        | NONE =>
+                                                          (err(pos, "Type " ^ S.name symbol ^ " not found");
+                                                           {venv=venv, tenv=S.enter(tenv, name, TY.ARRAY(TY.BOTTOM, ref()))}))
+                          | A.RecordTy fields =>
+                            let
+                                fun checkField {name, escape, typ, pos} =
+                                    case S.look(tenv, typ)
+                                     of SOME(ty) => (name, ty)
+                                      | NONE => (name, TY.PENDING(actualTy typ))
+                                fun checkFieldName ({name, escape, typ, pos}, existingNames) =
+                                    if Set.member(existingNames, name)
+                                    then (err(pos, "Redefinition of field with name "
+                                                   ^ S.name name);
+                                          existingNames)
+                                    else Set.add(existingNames, name)
+                                val _ = foldl checkFieldName Set.empty fields
+                            in
+                                {venv=venv, tenv=S.enter(tenv, name, TY.RECORD(map checkField fields, ref ()))}
+                            end
+                    fun checkTypeName ({name, ty, pos}, existingNames) =
+                        if Set.member(existingNames, name)
+                        then (err(pos, "Type with name "
+                                       ^ S.name name
+                                       ^ " already exists in this mutually recursive type group");
+                              existingNames)
+                        else Set.add(existingNames, name)
+                    val _ = foldl checkTypeName Set.empty decs
                 in
                     foldl checkTypeDec {venv=venv, tenv=tenv} decs
                 end

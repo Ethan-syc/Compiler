@@ -11,6 +11,6 @@ datatype ty =
          | BOTTOM
          | ARRAY of ty * unique
 	 (* | NAME of Symbol.symbol * ty option ref *)
-         | PENDING of unit -> ty
+         | PENDING of (ty Symbol.table * int) -> ty
        | UNIT
 end

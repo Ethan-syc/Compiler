@@ -1,7 +1,8 @@
 let
-  type rec = {a: int, b: string}
-  type arrtype = array of string
-  var arr: arrtype := arrtype[3] of "a"
+  type A = array of B
+  type B = array of C
+  type C = int
+  var y: B := B[3] of 0
+  var x: A := A[3] of y
 in
-  arr[3] := "b"
 end
