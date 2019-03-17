@@ -1,7 +1,7 @@
 let
   type rec = {a: int, b: string}
   type arrtype = array of string
-  var arr: arrtype := arrtype[3] of 1
+  var arr: arrtype := arrtype[3] of "a"
 in
   arr[3] := "b"
 end
