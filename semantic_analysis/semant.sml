@@ -306,10 +306,10 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             in
                 checkSubscriptVar venv tenv (var, exp, pos)
             end
-
     in
         trexp(exp)
     end
+
 and transDecs(venv: venvType, tenv: tenvType, decs: A.dec list) =
     foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec)) {venv=venv, tenv=tenv} decs
 and transDec (venv, tenv, dec) =
@@ -363,7 +363,13 @@ and transDec (venv, tenv, dec) =
                             {venv=venv', tenv=tenv}
                         end
                       | checkFunctionDec ({name, params, body: A.exp, pos, result=NONE}, {venv: venvType, tenv: tenvType}) =
-                        {venv=venv, tenv=tenv}
+                        let
+                          val bodyTy = #ty (transExp(venv, tenv, body))
+                        in
+                          if (doCheckSameType(TY.UNIT, bodyTy, pos))
+                          then {venv=venv, tenv=tenv}
+                          else (err(pos, "procedure's body must return unit"); {venv=venv, tenv=tenv})
+                        end
                 in
                     foldl checkFunctionDec {venv=venv, tenv=tenv} decs
                 end
