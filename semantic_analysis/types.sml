@@ -12,5 +12,19 @@ datatype ty =
          | ARRAY of ty * unique
 	 (* | NAME of Symbol.symbol * ty option ref *)
          | PENDING of (ty Symbol.table * int) -> ty
-       | UNIT
+         | UNIT
+
+fun join [] = ""
+  | join (s::[]) = s
+  | join (s::rest) = s ^ "," ^ join(rest)
+
+fun fieldToString (symbol, ty) = Symbol.name symbol ^ ": " ^ typeToString ty
+and typeToString (RECORD(fields, _)) = "RECORD {" ^ (join (map fieldToString fields)) ^ "}"
+  | typeToString (NIL) = "NIL"
+  | typeToString (INT) = "INT"
+  | typeToString (STRING) = "STRING"
+  | typeToString (BOTTOM) = "BOTTOM"
+  | typeToString (ARRAY(arrType, _)) = "ARRAY of " ^ typeToString(arrType)
+  | typeToString (UNIT) = "UNIT"
+  | typeToString (PENDING func) = "PENDING"
 end

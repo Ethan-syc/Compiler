@@ -94,7 +94,7 @@ dec: tydecs (tydecs)
 decs: dec decs (dec::decs)
     | dec ([dec])
 
-tydecs: tydec tydecs  (case (tydecs, tydec) of (A.TypeDec(t1), A.TypeDec(t2)) => A.TypeDec (t1@t2)
+tydecs: tydec tydecs  (case (tydec, tydecs) of (A.TypeDec(t1), A.TypeDec(t2)) => A.TypeDec (t1@t2)
                                            | _ => ErrorMsg.impossible "tydec must be list")
       | tydec (tydec)
 
