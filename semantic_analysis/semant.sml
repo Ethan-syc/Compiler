@@ -20,7 +20,7 @@ fun err(pos,message) = ErrorMsg.error pos message
 fun errAndBottom(pos, message) = (err(pos, message); {exp=(), ty=TY.BOTTOM})
 
 (* TODO: Change this to false to suppress all messages *)
-fun debug(message) = if true then print("DEBUG: " ^ message) else ()
+fun debug(message) = if false then print("DEBUG: " ^ message) else ()
 
 fun actualTy symbol =
     let
@@ -150,6 +150,9 @@ and checkFieldVar venv tenv (var, symbol, pos) =
                         val innerType = #ty (checkFieldVar venv tenv (var', symbol', pos'))
                     in
                         case innerType of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)}
+                                            | TY.PENDING(func) => (case func(tenv, pos)
+                                                                    of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)}
+                                                                     | _ => (err(pos, "Inner type is not a RECORD"); {exp=(), ty=TY.BOTTOM}))
                                             | _ => (err(pos, "Inner type is not a RECORD"); {exp=(), ty=TY.BOTTOM})
                     end
                   (* nested SubscriptVar, recurse *)
@@ -158,6 +161,9 @@ and checkFieldVar venv tenv (var, symbol, pos) =
                         val innerType = checkSubscriptVar venv tenv (var', exp', pos')
                     in
                         case #ty innerType of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)}
+                                            | TY.PENDING(func) => (case func(tenv, pos)
+                                                                    of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)}
+                                                                     | _ => (err(pos, "Inner type is not a RECORD"); {exp=(), ty=TY.BOTTOM}))
                                             | _ => (err(pos, "Inner type is not a RECORD"); {exp=(), ty=TY.BOTTOM})
                     end
     end
@@ -178,6 +184,9 @@ and checkSubscriptVar venv tenv (var, exp, pos) =
                     val innerType = checkFieldVar venv tenv (var', symbol', pos')
                 in
                     case #ty innerType of TY.ARRAY (ty, _) => {exp=(), ty=ty}
+                                        | TY.PENDING(func) => (case func(tenv, pos)
+                                                                of TY.ARRAY (ty, _) => {exp=(), ty=ty}
+                                                                 | _ => (err(pos, "Expected ARRAY"); {exp=(), ty=TY.BOTTOM}))
                                         | _ => (err(pos, "Expected ARRAY"); {exp=(), ty=TY.BOTTOM})
                 end
               | A.SubscriptVar (var', exp', pos') =>
@@ -185,14 +194,25 @@ and checkSubscriptVar venv tenv (var, exp, pos) =
                     val innerType = checkSubscriptVar venv tenv (var', exp', pos')
                 in
                     case #ty innerType of TY.ARRAY (ty, _) => {exp=(), ty=ty}
+                                        | TY.PENDING(func) => (case func(tenv, pos)
+                                                                of TY.ARRAY (ty, _) => {exp=(), ty=ty}
+                                                                 | _ => (err(pos, "Expected ARRAY"); {exp=(), ty=TY.BOTTOM}))
                                         | _ => (err(pos, "Expected ARRAY"); {exp=(), ty=TY.BOTTOM})
                 end
 
+(* use a stack of bool to keep tracking the break status *)
 val loopBroken: (bool ref list) ref = ref []
+
+(* push a true into stack when entering a loop which indicate the loop is not broken *)
 fun enterLoop() = loopBroken := ref true::(!loopBroken)
+
+(* pop a bool out of stack when leaving a loop *)
 fun exitLoop() =
     case !loopBroken of [] => debug("Compiler error: no loop to exit\n")
                       | hd::rest => loopBroken := rest
+
+(* change the top of the stack to false if the top is true,
+err if the loop is already broken or not in loop*)
 fun breakLoop(pos) =
     case !loopBroken of [] => err(pos, "Break expression can only be used in a loop")
                       | hd::rest =>
@@ -361,16 +381,18 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             then (err(pos, "Size of an array must be INT"); {exp=(), ty=TY.BOTTOM})
             else
                 let
-                    val initType = trexp(init)
+                    val initType = (case #ty (trexp(init)) of TY.PENDING(func) => func(tenv, pos)
+                                                      | ty => ty)
                     val arrayType = S.look(tenv, typ)
                 in
                     case arrayType of SOME(ty) =>
                                       let
                                           val actualType = case ty of TY.PENDING(func) => func(tenv, pos)
                                                                     | ty => ty
+
                                       in
                                          case actualType of TY.ARRAY(ty, _) =>
-                                                            if doCheckSameType(tenv, ty, #ty initType, pos)
+                                                            if doCheckSameType(tenv, ty, initType, pos)
                                                             then {exp=(), ty=actualType}
                                                             else errAndBottom(pos, "init-exp and array type mismatch")
                                                           | _ => errAndBottom(pos, S.name typ ^ " is not an ARRAY")
@@ -401,6 +423,10 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                                         (case initType of TY.NIL =>
                                                           (err(pos, "Long form must be used if init-exp is NIL");
                                                            {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
+                                                        | TY.PENDING(func) => (case func(tenv, pos) of TY.NIL =>
+                                                                                                (err(pos, "Long form must be used if init-exp is NIL");
+                                                                                                 {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
+                                                                                                    | _ => {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=initType, loopVar=false})})
                                                         | _ => {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=initType, loopVar=false})})
                                       | SOME(symbol, pos) =>
                                         (* If a variable type is specified, first check the type of the init exp.
@@ -564,6 +590,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                             val result = foldl checkTypeDec {venv=venv, tenv=tenv} decs
                             val typeMap = foldl makeTypeMap S.empty decs
                             val cycleDetected = foldl (fn (tf, result) => result orelse tf) false (map (checkTypeCycle typeMap) decs)
+                            (* check every dec onece after we add all the pending ty into the new tenv to make sure they can resolve correctly *)
                             val _ = if not cycleDetected then map (checkPending (#tenv result)) decs else []
                         in
                             result
@@ -571,7 +598,6 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
     in
         trexp(exp)
     end
-fun transTy (tenv:venvType, ty:A.ty):TY.ty = TY.NIL
 
 fun transProg (AST_expression:A.exp) =
     let
