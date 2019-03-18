@@ -12,7 +12,7 @@ Book: Modern Compiler Implementation in ML ©1998 by Andrew W. Appel
 |:---:|:---:|:---:|
 |Lexical Analysis |1/31|:white_check_mark:|
 |Parsing |2/14|:white_check_mark:|
-|Semantic Analysis |3/7|:cold_sweat:|
+|Semantic Analysis |3/7|:white_check_mark:|
 |Frame Analysis and Intermediate Representation |3/21|:cold_sweat:|
 |Instruction Selection |3/28|:cold_sweat:|
 |Liveness Analysis |4/9|:cold_sweat:|
