@@ -1,13 +1,12 @@
 let
   type ai = array of int
-  type rec = {arr: ai, v: int}
-  type a = b
-  type b = c
-  type c = a
-  var arr: ai := ai [10] of 0
-  var x: ai := ai [3] of 0
+  type rec = {arr: ai, v: rec2}
+  type rec2 = {arr: ai, v: rec}
+  var arr := print("abc")
+  var x: ai := ai [3] of ()
   var y: rec := nil
-  function f(x: int) = 3
+  var z: rec2 := nil
+
 in
-  y := rec {arr=x, y=3}
+  z.v.v.v.arr.v := nil
 end
