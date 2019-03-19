@@ -423,6 +423,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                                         (case initType of TY.NIL =>
                                                           (err(pos, "Long form must be used if init-exp is NIL");
                                                            {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
+                                                        | TY.UNIT =>
+                                                          (err(pos, "can't declare varibale with UNIT type");
+                                                           {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
                                                         | TY.PENDING(func) => (case func(tenv, pos) of TY.NIL =>
                                                                                                 (err(pos, "Long form must be used if init-exp is NIL");
                                                                                                  {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
