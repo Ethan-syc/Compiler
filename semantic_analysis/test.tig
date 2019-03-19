@@ -1,23 +1,12 @@
 let
-  type a = {one:b, two:c}
-  type d = array of e
-  type f = array of a
-  type b = {one:string, two:d}
-  type e = int
-  type c = array of d
-  var arrayd := d[10] of 3
-  var arrayc := c[1] of arrayd
-  var recordb := b {one="aa", two=arrayd}
-  var recorda := a {one=recordb, two=arrayc}
-  var arrayf := f[10] of recorda
-  function a (c:int):string =
-    (b("a")+1; "a")
-  function b (k:string):int =
-    (a(1); 3)
+  type ai = array of int
+  type rec = {arr: ai, v: rec2}
+  type rec2 = {arr: ai, v: rec}
+  var arr := print("abc")
+  var x: ai := ai [3] of ()
+  var y: rec := nil
+  var z: rec2 := nil
+
 in
-  arrayf[1].two[1][2] = 1;
-  recorda.one.two[1] = 1;
-  recorda.one.one = "a";
-  a(11);
-  b("ww")
+  z.v.v.v.arr.v := nil
 end

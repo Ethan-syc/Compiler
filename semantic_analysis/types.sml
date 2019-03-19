@@ -23,8 +23,8 @@ and typeToString (RECORD(fields, _)) = "RECORD {" ^ (join (map fieldToString fie
   | typeToString (NIL) = "NIL"
   | typeToString (INT) = "INT"
   | typeToString (STRING) = "STRING"
-  | typeToString (BOTTOM) = "BOTTOM"
+  | typeToString (BOTTOM) = "<ERROR: UNKNOWN>"
   | typeToString (ARRAY(arrType, _)) = "ARRAY of " ^ typeToString(arrType)
-  | typeToString (UNIT) = "UNIT"
-  | typeToString (PENDING func) = "PENDING"
+  | typeToString (UNIT) = "<NO VALUE>"
+  | typeToString (PENDING func) = "<ERROR: PENDING>"
 end
