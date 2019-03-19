@@ -1,8 +1,13 @@
-while 1 do
-  (for i := 1 to 5 do
-    let
-      var x: int := 3
-    in
-      break
-    end;
-  break)
+let
+  type ai = array of int
+  type rec = {arr: ai, v: int}
+  type a = b
+  type b = c
+  type c = a
+  var arr: ai := ai [10] of 0
+  var x: ai := ai [3] of 0
+  var y: rec := nil
+  function f(x: int) = 3
+in
+  y := rec {arr=x, y=3}
+end
