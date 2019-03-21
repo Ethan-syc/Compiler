@@ -274,7 +274,7 @@ fun inLoop(pos) =
     case !loopLevel of 0 => err(pos, "Break expression can only be used in a loop")
                      | _ => ()
 
-fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
+fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: Translate.level) =
     let
         fun trexp(A.NilExp) = {exp=(), ty=TY.NIL}
           | trexp(A.IntExp _) = {exp=(), ty=TY.INT}
@@ -304,9 +304,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
           | trexp (A.VarExp var) = trvar(var)
           | trexp (A.LetExp {decs, body, pos}) =
             let
-                val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs)
+                val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs, level)
             in
-                transExp(venv', tenv', body)
+                transExp(venv', tenv', body, level)
             end
           | trexp (A.SeqExp []) = {exp=(), ty=TY.UNIT}
           | trexp (A.SeqExp [(exp, pos)]) = trexp(exp)
@@ -340,7 +340,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             end
           | trexp (A.CallExp {func, args, pos}) =
             (case S.look(venv, func)
-              of SOME(E.FunEntry {formals, result}) =>
+              of SOME(E.FunEntry {level, label, formals, result}) =>
                  let
                      val args': TY.ty list = map #ty (map trexp args)
                      val argsLength = length args'
@@ -432,7 +432,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                 val _ = doCheckSameType(tenv, TY.INT, #ty (trexp(lo)), pos)
                 val _ = doCheckSameType(tenv, TY.INT, #ty (trexp(hi)), pos)
                 val _ = enterLoop()
-                val bodyTy = #ty (transExp(newVenv, tenv, body))
+                val bodyTy = #ty (transExp(newVenv, tenv, body, level))
                 val _ = exitLoop()
                 val isNoValue = doCheckSameType(tenv, TY.UNIT, bodyTy, pos)
             in
@@ -474,12 +474,12 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
             in
                 checkSubscriptVar venv tenv (var, exp, pos)
             end
-        and transDecs (venv: venvType, tenv: tenvType, decs: A.dec list) =
-            foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec)) {venv=venv, tenv=tenv} decs
-        and transDec (venv, tenv, dec) =
+        and transDecs (venv: venvType, tenv: tenvType, decs: A.dec list, level: Translate.level) =
+            foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec, level)) {venv=venv, tenv=tenv} decs
+        and transDec (venv, tenv, dec, level) =
             case dec of A.VarDec {name=name, typ=typ, init=init, pos=pos, ...} =>
                         let
-                            val {exp=_, ty=initType} = transExp(venv, tenv, init)
+                            val {exp=_, ty=initType} = transExp(venv, tenv, init, level)
                         in
                             case typ of NONE =>
                                         (* If a variable type is not specified, simply take whatever type the
@@ -535,22 +535,25 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
                                                         (case S.look(tenv, rt) of SOME(ty) => ty
                                                                                 | NONE => (err(pos, "Type " ^ S.name rt ^ " is not found"); TY.BOTTOM))
                                                       | NONE => TY.UNIT
+                                    (* TODO *)
+                                    val label = Temp.namedlabel(S.name name)
+                                    val newLevel = TR.newLevel {parent=level, name=label,formals=[]}
                                 in
-                                    S.enter(venv, name, E.FunEntry{formals=params', result=result_ty})
+                                    S.enter(venv, name, E.FunEntry{level=newLevel, label=label, formals=params', result=result_ty})
                                 end
                             fun checkFunctionDec ({name, params, body: A.exp, pos, result}, {venv: venvType, tenv: tenvType}) =
                                 let
                                     (* We are guaranteed to have this symbol in venv because checkFunctionHeader
                                        will have been run *)
                                     val entry = valOf (S.look(venv, name))
-                                    val resultType = case entry of E.FunEntry{formals, result} => result
+                                    val resultType = case entry of E.FunEntry{level, label, formals, result} => result
                                                                 | _ => (debug("Compiler error: "
                                                                               ^ S.name name
                                                                               ^ " is not a FunEntry in venv");
                                                                         TY.BOTTOM)
                                     val params' = map transParam params
                                     val venv' = foldl enterParam venv params'
-                                    val actualReturn = transExp(venv', tenv, body)
+                                    val actualReturn = transExp(venv', tenv, body, level)
                                     val _ = if not (doCheckSameType(tenv, resultType, #ty actualReturn, pos))
                                     then
                                         (err(pos, "Function/procedure "
@@ -678,7 +681,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp) =
 
 fun transProg (AST_expression:A.exp) =
     let
-        val _ = transExp(E.base_venv, E.base_tenv, AST_expression)
+        val _ = transExp(E.base_venv, E.base_tenv, AST_expression, Translate.outermost)
     in
         ()
     end
