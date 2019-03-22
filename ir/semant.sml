@@ -50,7 +50,7 @@ fun cycleToString (l, on) =
 
 fun checkIsLoopVariable (var, venv, pos) =
     case var of A.SimpleVar(varname, varpos) =>
-                (case (S.look(venv, varname)) of SOME(E.VarEntry {ty, loopVar}) => loopVar
+                (case (S.look(venv, varname)) of SOME(E.VarEntry {access, ty, loopVar}) => loopVar
                                                | _ => false)
               | _ => false
 
@@ -410,7 +410,8 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: Translate.level) 
 
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}) =
             let
-                val newVenv = S.enter(venv, var, E.VarEntry{ty=TY.INT, loopVar=true})
+                val access = Translate.allocLocal level (FindEscape.find (venv, var))
+                val newVenv = S.enter(venv, var, E.VarEntry{access=access, ty=TY.INT, loopVar=true})
                 val _ = doCheckSameType(tenv, TY.INT, #ty (trexp(lo)), pos)
                 val _ = doCheckSameType(tenv, TY.INT, #ty (trexp(hi)), pos)
                 val _ = enterLoop()
@@ -463,7 +464,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: Translate.level) 
              of A.VarDec {name=name, typ=typ, init=init, pos=pos, ...} =>
                 let
                     val {exp=_, ty=initType} = transExp(venv, tenv, init, level)
-                    (* val varAccess = TR.allocLocal level FindEscape.find(venv, name) *)
+                    val access = TR.allocLocal level (FindEscape.find (venv, name))
                 in
                     case typ of NONE =>
                                 (* If a variable type is not specified, simply take whatever type the
@@ -474,17 +475,17 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: Translate.level) 
                                 in
                                     case initType of TY.NIL =>
                                                      (err(pos, "Long form must be used if init-exp is NIL.");
-                                                      {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
+                                                      {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{access=access, ty=TY.BOTTOM, loopVar=false})})
                                                    | TY.UNIT =>
                                                      (err(pos, "Cannot define a variable with no value.");
                                                       err(pos, "Hint: init-exp returns no value");
-                                                      {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
-                                                   | _ => {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=initType, loopVar=false})}
+                                                      {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{access=access, ty=TY.BOTTOM, loopVar=false})})
+                                                   | _ => {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{access=access, ty=initType, loopVar=false})}
                                 end
                               | SOME(symbol, pos) =>
                                 (* If a variable type is specified, first check the type of the init exp.
-                                           If init exp returns NIL, then check if symbol represents a RECORD.
-                                           Otherwise, check if symbol names the type returned by init exp *)
+                                   If init exp returns NIL, then check if symbol represents a RECORD.
+                                   Otherwise, check if symbol names the type returned by init exp *)
                                 let
                                     val symbolTy = S.look(tenv, symbol)
                                 in
@@ -494,11 +495,11 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: Translate.level) 
                                             val _ = debug(S.name symbol ^ " is " ^ TY.typeToString symbolType ^ "\n")
                                             val _ = doCheckSameType(tenv, symbolType, initType, pos)
                                         in
-                                            {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=symbolType, loopVar=false})}
+                                            {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{access=access, ty=symbolType, loopVar=false})}
                                         end
                                       | NONE =>
                                         (err(pos, "Type " ^ S.name symbol ^ " is not found");
-                                         {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{ty=TY.BOTTOM, loopVar=false})})
+                                         {tenv=tenv, venv=S.enter(venv, name, E.VarEntry{access=access, ty=TY.BOTTOM, loopVar=false})})
                                 end
 
                 end
@@ -508,7 +509,12 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: Translate.level) 
                         case S.look(tenv, typ) of SOME t => {name=name, ty=t}
                                                 | NONE =>
                                                   (err(pos, "Type " ^ S.name typ ^ " is not found"); {name=name, ty=TY.BOTTOM})
-                    fun enterParam ({name, ty}, venv) = S.enter(venv, name, E.VarEntry{ty=ty, loopVar=false})
+                    fun enterParam ({name, ty}, venv) =
+                        let
+                            val access = TR.allocLocal level (FindEscape.find(venv, name))
+                        in
+                            S.enter(venv, name, E.VarEntry{access=access, ty=ty, loopVar=false})
+                        end
                     fun checkFunctionHeader ({name, params, body, pos, result}, venv) =
                         let
                             val params' = map #ty (map transParam params)

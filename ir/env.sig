@@ -2,7 +2,7 @@ signature ENV =
 sig
   type access
   type ty = Types.ty
-  datatype enventry = VarEntry of {ty: ty, loopVar: bool}
+  datatype enventry = VarEntry of {access: Translate.access, ty: ty, loopVar: bool}
                     | FunEntry of {level: Translate.level,
                                    label: Temp.label,
                                    formals: ty list, result: ty}
