@@ -1,12 +1,8 @@
 let
+  type arrtype = ai
   type ai = array of int
-  type rec = {arr: ai, v: rec2}
-  type rec2 = {arr: ai, v: rec}
-  var arr := print("abc")
-  var x: ai := ai [3] of ()
-  var y: rec := nil
-  var z: rec2 := nil
-
+  var x: arrtype := ai [3] of 0
+  type ai = string
 in
-  z.v.v.v.arr.v := nil
+  x[3] := 0
 end

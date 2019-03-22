@@ -11,7 +11,7 @@ datatype ty =
          | BOTTOM
          | ARRAY of ty * unique
 	 (* | NAME of Symbol.symbol * ty option ref *)
-         | PENDING of (ty Symbol.table * int) -> ty
+         | PENDING of unit -> ty
          | UNIT
 
 fun join [] = ""

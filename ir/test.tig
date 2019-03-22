@@ -1,6 +1,8 @@
 let
+  type arrtype = ai
+  type ai = array of int
+  var x: arrtype := ai [3] of 0
+  type ai = string
 in
-while 1 do
-(break; break);
-break
+  x[3] := 0
 end
