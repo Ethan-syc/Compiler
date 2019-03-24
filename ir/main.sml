@@ -6,7 +6,7 @@ fun debug(fileName : string) =
         val ast = Parse.parse(fileName)
         val _ = PrintAbsyn.print(TextIO.stdOut, ast)
     in
-        Semant.transExp(Env.base_venv, Env.base_tenv, Parse.parse (fileName), Translate.outermost)
+        Semant.transProg(Parse.parse (fileName))
     end
 fun runTests(i) =
     if i > 49

@@ -1,8 +1,13 @@
 let
   type arrtype = ai
   type ai = array of int
-  var x: arrtype := ai [3] of 0
-  type ai = string
+  var q: arrtype := ai [3] of 0
+  function f(x: int): int =
+    let
+    in
+      q := arrtype [3] of 1;
+      x + 1
+    end
 in
-  x[3] := 0
+  f(3)
 end
