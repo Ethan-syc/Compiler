@@ -344,9 +344,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                 val arrayType = S.look(tenv, typ)
                 val exp = TR.transArray(initExp, sizeExp)
             in
-                case arrayType of SOME(TY.ARRAY(ty, _)) =>
+                case arrayType of SOME(TY.ARRAY(ty, unique)) =>
                                   if doCheckSameType(ty, initTy, pos)
-                                  then {exp=exp, ty=ty}
+                                  then {exp=exp, ty=TY.ARRAY(ty, unique)}
                                   else errAndBottom(pos, exp, "init-exp and array type mismatch")
                                 | _ => errAndBottom(pos, exp, S.name typ ^ " is not defined or is not an ARRAY")
             end
@@ -387,17 +387,21 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
             in
                 case ty of TY.RECORD (tylist, _) =>
                            let val (offset, ty) = checkRecord(0, symbol, pos, tylist)
-                                                           (* | TY.PENDING(func) => *)
-                                                           (*   let *)
-                                                           (*       val actualType = func() *)
-                                                           (*   in *)
-                                                           (*       case actualType *)
-                                                           (*        of TY.RECORD (tylist, _) => {exp=(), ty=checkRecord(symbol, pos, tylist, tenv)} *)
-                                                           (*         | _ => err(pos', var, actualType) *)
-                                                           (*   end *)
                            in
                                {exp=TR.transFieldVar(exp, TR.transConst offset), ty=ty}
                            end
+                         | TY.PENDING(func) =>
+                           let
+                                val actualType = func()
+                           in
+                                case actualType
+                                 of TY.RECORD (tylist, _) =>
+                                 (let val (offset, ty) = checkRecord(0, symbol, pos, tylist)
+                                 in
+                                     {exp=TR.transFieldVar(exp, TR.transConst offset), ty=ty}
+                                 end)
+                                  | _ => err(pos, var, exp, ty)
+                            end
                          | _ => err(pos, var, exp, ty)
             end
         (* check the type of subscriptVar, return expty *)

@@ -1,8 +1,17 @@
-/* a record type and a record variable */
 let
-	type  rectype = {name:string, age:int}
-	var rec1:rectype := rectype {name="Nobody", age=1000}
+type a = {one:b, two:c}
+type d = array of e
+type f = array of a
+type b = {one:string, two:d}
+type e = int
+type c = array of d
+var arrayd := d[10] of 3
+var arrayc := c[1] of arrayd
+var recordb := b {one="aa", two=arrayd}
+var recorda := a {one=recordb, two=arrayc}
+var arrayf := f[10] of recorda
 in
-	(rec1.name := "Somebody";
-	rec1)
+arrayf[1].two[1][2] = 1;
+recorda.one.two[1] = 1;
+recorda.one.one = "a"
 end
