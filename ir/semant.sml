@@ -266,7 +266,7 @@ fun inLoop(pos) =
     case !loopLevel of 0 => err(pos, "Break expression can only be used in a loop")
                      | _ => ()
 
-fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level) =
+fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: Temp.label) =
     let
         (* Bind venv, tenv and level to these functions for use in trvar *)
         (* Note that these are the environments/levels when an assign stmt
@@ -307,9 +307,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level) =
           | trexp (A.VarExp var) = trvar(var)
           | trexp (A.LetExp {decs, body, pos}) =
             let
-                val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs, level)
+                val {venv=venv', tenv=tenv'} = transDecs(venv, tenv, decs, level, break)
             in
-                transExp(venv', tenv', body, level)
+                transExp(venv', tenv', body, level, break)
             end
           | trexp (A.SeqExp []) = {exp=(), ty=TY.UNIT}
           | trexp (A.SeqExp [(exp, pos)]) = trexp(exp)
@@ -420,9 +420,10 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level) =
             let
                 val _ = checkInt(tenv, trexp(test), pos)
                 val _ = enterLoop()
-                val bodyTy = trexp(body)
+                val breakLabel = Temp.newlabel()
+                val bodyTy = #ty (transExp(venv, tenv, body, level, breakLabel))
                 val _ = exitLoop()
-                val isNoValue = doCheckSameType(tenv, #ty bodyTy, TY.UNIT, pos)
+                val isNoValue = doCheckSameType(tenv, bodyTy, TY.UNIT, pos)
             in
                 if isNoValue
                 then {exp=(), ty=TY.UNIT}
@@ -436,7 +437,8 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level) =
                 val _ = doCheckSameType(tenv, TY.INT, #ty (trexp(lo)), pos)
                 val _ = doCheckSameType(tenv, TY.INT, #ty (trexp(hi)), pos)
                 val _ = enterLoop()
-                val bodyTy = #ty (transExp(newVenv, tenv, body, level))
+                val breakLabel = Temp.newlabel()
+                val bodyTy = #ty (transExp(newVenv, tenv, body, level, breakLabel))
                 val _ = exitLoop()
                 val isNoValue = doCheckSameType(tenv, TY.UNIT, bodyTy, pos)
             in
@@ -478,13 +480,13 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level) =
             in
                 transSubscriptVar (var, exp, pos)
             end
-        and transDecs (venv: venvType, tenv: tenvType, decs: A.dec list, level: Translate.level) =
-            foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec, level)) {venv=venv, tenv=tenv} decs
-        and transDec (venv, tenv, dec, level) =
+        and transDecs (venv: venvType, tenv: tenvType, decs: A.dec list, level: Translate.level, break) =
+            foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec, level, break)) {venv=venv, tenv=tenv} decs
+        and transDec (venv, tenv, dec, level, break) =
             case dec
              of A.VarDec {name=name, typ=typ, init=init, pos=pos, ...} =>
                 let
-                    val {exp=_, ty=initType} = transExp(venv, tenv, init, level)
+                    val {exp=_, ty=initType} = transExp(venv, tenv, init, level, break)
                     val access = TR.allocLocal level (FindEscape.find (venv, name))
                 in
                     case typ of NONE =>
@@ -588,7 +590,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level) =
                             val formals = map (fn(x) => false) params'
                             val newLevel = TR.newLevel {parent=level, name=(#label entry), formals=formals}
                             val _ = debug("Function " ^ S.name name ^ " creates level " ^ Int.toString (TR.depth newLevel) ^ "\n")
-                            val actualReturn = transExp(venv', tenv, body, newLevel)
+                            val actualReturn = transExp(venv', tenv, body, newLevel, break)
                             val _ = if not (doCheckSameType(tenv, resultType, #ty actualReturn, pos))
                                     then
                                         (err(pos, "Function/procedure "
@@ -727,8 +729,9 @@ and transTy(venv, tenv, decs) =
 fun transProg (AST_expression:A.exp) =
     let
         val frame = TR.newLevel {parent=TR.outermost, name=Temp.namedlabel("main"), formals=[]}
+        val breakLabel = Temp.newlabel()
     in
-        transExp(E.base_venv, E.base_tenv, AST_expression, frame)
+        transExp(E.base_venv, E.base_tenv, AST_expression, frame, breakLabel)
     end
 
 end

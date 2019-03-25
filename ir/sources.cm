@@ -20,7 +20,7 @@ temp.sig
 temp.sml
 tree.sml
 frame.sig
-MipsFrame.sml
+mipsFrame.sml
 utils.sml
 FindEscape.sml
 $/basis.cm

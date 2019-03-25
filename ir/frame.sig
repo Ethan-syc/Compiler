@@ -21,4 +21,6 @@ sig
   val exp : access -> Tree.exp -> Tree.exp
   val externalCall: string * Tree.exp list -> Tree.exp
   val procEntryExit1: frame * Tree.exp -> frag
+  val procEntryExit3: frame * Tree.exp -> frag
+  val allocString: string * frag list ref -> Temp.label
 end

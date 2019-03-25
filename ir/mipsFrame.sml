@@ -67,8 +67,8 @@ fun arg 0 = T.TEMP(A0)
   | arg n = T.MEM(T.BINOP(T.PLUS, T.TEMP(SP), T.CONST(4 * n)))
 fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel s), args)
-
-fun procEntryExit1 ({label, formals, offset, numLocals}, body) =
+fun procEntryExit1 (frame, body) = PROC {body=T.EXP body, frame=frame}
+fun procEntryExit3 ({label, formals, offset, numLocals}, body) =
     let val numLocals' = !numLocals
         fun viewShift (arg', formal, moves) =
             let val formal = exp formal (T.TEMP SP)
@@ -90,5 +90,22 @@ fun procEntryExit1 ({label, formals, offset, numLocals}, body) =
     in
         PROC {body=Utils.seq insns, frame={label=label, formals=formals, offset=offset, numLocals=numLocals}}
     end
+fun allocString (s, frags) =
+  let
+    fun findInList (frag) = case frag of PROC _ => false
+                                       | STRING (label, string) => if string = s then true else false
+    val findResult = List.find findInList (!frags)
+    val stringLabel = case findResult of SOME(STRING(label, string)) => label
+                                       | NONE =>
+                                                let
+                                                  val newLabel = Temp.newlabel()
+                                                  val _ = frags := STRING(newLabel, s)::(!frags)
+                                                in
+                                                  newLabel
+                                                end
+                                       | _ => Temp.newlabel()
+  in
+    stringLabel
+  end
 
 end

@@ -98,9 +98,46 @@ fun simpleVar ((decLevel: level, access: F.access), useLevel: level) =
                      (case useLevel of INNER {frame=useFrame, parent=parent, unique=r} =>
                                        if l = r
                                        then F.exp access (T.TEMP F.FP)
-                                       else F.exp access (simpleVar((decLevel, access), parent))
+                                       else F.exp access (followLink (useLevel, decLevel))
                                      | _ => raise InvalidAccess)
                    | _ => raise InvalidAccess
+
+fun FieldVar (arrayExp, offset) =
+  let
+    val addr = unEx arrayExp
+    val offset = unEx offset
+    val ansAddr = Temp.newtemp()
+    val offsetTemp = Temp.newtemp()
+    val lerror = Temp.newlabel()
+    val lCheckNeg = Temp.newlabel()
+    val lnext = Temp.newlabel()
+  in
+  (* error if offset >= size | offset < 0 *)
+    Ex(T.ESEQ(Utils.seq[
+      T.MOVE(T.TEMP offsetTemp, offset),
+      T.CJUMP(T.LE, T.MEM (T.BINOP(T.MINUS, addr, T.CONST(4))), T.TEMP offsetTemp, lerror, lCheckNeg),
+      T.LABEL lerror,
+      T.EXP(F.externalCall("exit",[])),
+      T.LABEL lCheckNeg,
+      T.CJUMP(T.LT, T.TEMP offsetTemp, T.CONST(0), lerror, lnext),
+      T.LABEL lnext,
+      T.MOVE(T.TEMP ansAddr, T.MEM (T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, T.TEMP offsetTemp, T.CONST 4))))],
+      T.MEM (T.TEMP ansAddr)
+      ))
+  end
+
+fun RecordExp (recordExp, offset) =
+  let
+    val addr = unEx recordExp
+    val offset = unEx offset
+    val ansAddr = Temp.newtemp()
+    val offsetTemp = Temp.newtemp()
+  in
+    Ex(T.ESEQ(Utils.seq[
+      T.MOVE(T.TEMP offsetTemp, offset),
+      T.MOVE(T.TEMP ansAddr, T.MEM (T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, T.TEMP offsetTemp, T.CONST 4))))],
+      T.MEM (T.TEMP ansAddr)))
+  end
 
 fun transIf (conde, truee, falsee) =
     let val c = unCx conde
@@ -121,41 +158,48 @@ fun transIf (conde, truee, falsee) =
                   T.TEMP ans))
     end
 
-fun transWhile (body, cond) =
+fun transWhile (body, cond, breakLabel) =
     let val s = unNx body
         val c = unCx cond
         val l1 = Temp.newlabel()
-        val l2 = Temp.newlabel()
     in
-        Nx(Utils.seq[c(l1, l2),
+        Nx(Utils.seq[c(l1, breakLabel),
                T.LABEL l1,
                s,
-               c(l1, l2),
-               T.LABEL l2])
+               c(l1, breakLabel),
+               T.LABEL breakLabel])
     end
 
-fun transFor (starte, ende, body) =
+fun transFor (starte, ende, body, breakLabel) =
     let val r = Temp.newtemp()
         val rend = Temp.newtemp()
         val start' = unEx starte
         val end' = unEx ende
         val l1 = Temp.newlabel()
-        val l2 = Temp.newlabel()
         val l3 = Temp.newlabel()
         val body' = unNx body
     in
         Nx(Utils.seq[T.MOVE (T.TEMP r, start'),
                T.MOVE (T.TEMP rend, end'),
-               T.CJUMP (T.LE, T.TEMP r, T.TEMP rend, l1, l2),
+               T.CJUMP (T.LE, T.TEMP r, T.TEMP rend, l1, breakLabel),
                T.LABEL l3,
                T.EXP (T.BINOP (T.PLUS, T.TEMP r, T.CONST 1)),
                T.LABEL l1,
                body',
-               T.CJUMP (T.LT, T.TEMP r, T.TEMP rend, l3, l2),
-               T.LABEL l2])
+               T.CJUMP (T.LT, T.TEMP r, T.TEMP rend, l3, breakLabel),
+               T.LABEL breakLabel])
     end
 
-fun transInt (i) = T.CONST(i)
+fun transBreak breakLabel = Nx (T.JUMP (T.NAME breakLabel, [breakLabel]))
+
+fun transInt (i) = Ex (T.CONST(i))
+
+fun transString (s) =
+  let
+    val label = F.allocString(s, frags)
+  in
+    Ex (T.NAME(label))
+  end
 
 fun operToBinOp (A.PlusOp) = T.PLUS
   | operToBinOp (A.MinusOp) = T.MINUS
@@ -259,4 +303,5 @@ fun procEntryExit (OUTERMOST, body) = (debug("Compiler error: Function declarati
         ()
     end
 
+fun getResult () = !frags
 end
