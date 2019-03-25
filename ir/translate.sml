@@ -97,48 +97,10 @@ fun simpleVar ((decLevel: level, access: F.access), useLevel: level) =
     case decLevel of INNER {frame=decFrame, parent=_, unique=l} =>
                      (case useLevel of INNER {frame=useFrame, parent=parent, unique=r} =>
                                        if l = r
-                                       then F.exp access (T.TEMP F.FP)
-                                       else F.exp access (followLink (useLevel, decLevel))
+                                       then Ex(F.exp access (T.TEMP F.FP))
+                                       else Ex(F.exp access (followLink (useLevel, decLevel)))
                                      | _ => raise InvalidAccess)
                    | _ => raise InvalidAccess
-
-fun FieldVar (arrayExp, offset) =
-  let
-    val addr = unEx arrayExp
-    val offset = unEx offset
-    val ansAddr = Temp.newtemp()
-    val offsetTemp = Temp.newtemp()
-    val lerror = Temp.newlabel()
-    val lCheckNeg = Temp.newlabel()
-    val lnext = Temp.newlabel()
-  in
-  (* error if offset >= size | offset < 0 *)
-    Ex(T.ESEQ(Utils.seq[
-      T.MOVE(T.TEMP offsetTemp, offset),
-      T.CJUMP(T.LE, T.MEM (T.BINOP(T.MINUS, addr, T.CONST(4))), T.TEMP offsetTemp, lerror, lCheckNeg),
-      T.LABEL lerror,
-      T.EXP(F.externalCall("exit",[])),
-      T.LABEL lCheckNeg,
-      T.CJUMP(T.LT, T.TEMP offsetTemp, T.CONST(0), lerror, lnext),
-      T.LABEL lnext,
-      T.MOVE(T.TEMP ansAddr, T.MEM (T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, T.TEMP offsetTemp, T.CONST 4))))],
-      T.MEM (T.TEMP ansAddr)
-      ))
-  end
-
-fun RecordExp (recordExp, offset) =
-  let
-    val addr = unEx recordExp
-    val offset = unEx offset
-    val ansAddr = Temp.newtemp()
-    val offsetTemp = Temp.newtemp()
-  in
-    Ex(T.ESEQ(Utils.seq[
-      T.MOVE(T.TEMP offsetTemp, offset),
-      T.MOVE(T.TEMP ansAddr, T.MEM (T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, T.TEMP offsetTemp, T.CONST 4))))],
-      T.MEM (T.TEMP ansAddr)))
-  end
-
 fun transIf (conde, truee, falsee) =
     let val c = unCx conde
         and t = unEx truee
@@ -196,9 +158,11 @@ fun transInt (i) = Ex (T.CONST(i))
 
 fun transString (s) =
   let
-    val label = F.allocString(s, frags)
+      val label = Temp.newlabel()
+      val frag = F.allocString(label, s)
+      val _ = frags := frag::(!frags)
   in
-    Ex (T.NAME(label))
+      Ex(T.NAME label)
   end
 
 fun operToBinOp (A.PlusOp) = T.PLUS
@@ -248,17 +212,17 @@ fun transSeqExp [] = Ex (T.CONST 0)
 
 fun transAssign (lvalue, rvalue) = Nx(T.MOVE(unEx lvalue, unEx rvalue))
 
-fun transCall (curLevel, label, funcLevel, formals) =
+fun transCall (curLevel, label, funcLevel, args) =
     (* Functions in OUTERMOST do not take static links. *)
-    case funcLevel of OUTERMOST => Ex(T.CALL(T.NAME label, map unEx formals))
+    case funcLevel of OUTERMOST => Ex(T.CALL(T.NAME label, map unEx args))
                     | INNER {frame=decFrame, parent=_, unique=decUnique} =>
                       (case curLevel of INNER {frame=curFrame, parent=parent, unique=curUnique} =>
                                         (* If in the same level or self-recursion *)
                                         if curUnique = decUnique orelse (#label curFrame) = (#label decFrame)
-                                        then Ex(T.CALL(T.NAME label, (T.MEM(T.TEMP F.FP)::(map unEx formals))))
+                                        then Ex(T.CALL(T.NAME label, (T.MEM(T.TEMP F.FP)::(map unEx args))))
                                         else if depth(curLevel) > depth(funcLevel)
-                                        then Ex(T.CALL(T.NAME label, (followLink(curLevel, funcLevel)::(map unEx formals))))
-                                        else Ex(T.CALL(T.NAME label, ((T.TEMP F.FP)::(map unEx formals))))
+                                        then Ex(T.CALL(T.NAME label, (followLink(curLevel, funcLevel)::(map unEx args))))
+                                        else Ex(T.CALL(T.NAME label, ((T.TEMP F.FP)::(map unEx args))))
                                       | OUTERMOST => (debug("Compiler error: attempting to call in OUTERMOST"); raise Compiler))
 
 fun genMove offset from (exp, moves) =
@@ -280,17 +244,17 @@ fun transRecord (decFields, actualFields) =
                   T.TEMP addr))
     end
 
-fun transArray (initExp: exp, len) =
-    let val addr = Temp.newtemp()
+fun transArray (initExp, len) =
+    let val initExp = unEx initExp
+        val len = unEx len
+        val addr = Temp.newtemp()
+        val actualLen = Temp.newtemp()
         val actualAddr = Temp.newtemp()
-        val genMove = genMove 0 (T.TEMP actualAddr)
-        val moves = foldr genMove [] (Utils.arrayMul(initExp, len))
     in
-        Ex(T.ESEQ(Utils.seq([T.EXP(F.externalCall("malloc", [T.CONST(4 * (len + 1))])),
-                       T.MOVE(T.TEMP addr, T.TEMP F.RV),
-                       T.MOVE(T.TEMP actualAddr, T.BINOP(T.PLUS, T.TEMP addr, T.CONST(4)))]
-                      @ moves
-                      @ [T.MOVE(T.TEMP addr, T.CONST(len))]),
+        Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP actualLen, len),
+                            T.MOVE(T.TEMP addr, F.externalCall("malloc", [T.TEMP actualLen])),
+                            T.MOVE(T.TEMP actualAddr, T.BINOP(T.PLUS, T.TEMP addr, T.CONST(4))),
+                            T.EXP(F.externalCall("initArray", [T.TEMP actualAddr, initExp, T.TEMP actualLen]))],
                   T.TEMP actualAddr))
     end
 
@@ -304,4 +268,81 @@ fun procEntryExit (OUTERMOST, body) = (debug("Compiler error: Function declarati
     end
 
 fun getResult () = !frags
+
+fun transConst (i) = Ex(T.CONST i)
+
+fun transSubscriptVar (arrayExp, offset) =
+    let
+        val addr = unEx arrayExp
+        val offset = unEx offset
+        val ansAddr = Temp.newtemp()
+        val lerror = Temp.newlabel()
+        val lCheckNeg = Temp.newlabel()
+        val lnext = Temp.newlabel()
+    in
+        (* error if offset >= size | offset < 0 *)
+        Ex(T.ESEQ(Utils.seq[
+                       T.EXP(F.externalCall("boundsCheck", [
+                                               T.MEM(T.BINOP(T.MINUS, addr, T.CONST 4)),
+                                               offset])),
+                       T.MOVE(T.TEMP ansAddr, T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4))))],
+                  T.MEM(T.TEMP ansAddr)))
+    end
+
+fun transFieldVar (recordExp, offset) =
+    let
+        val addr = unEx recordExp
+        val offset = unEx offset
+        val ansAddr = Temp.newtemp()
+    in
+        Ex(T.ESEQ(Utils.seq[T.EXP(F.externalCall("checkNil", [addr])),
+                            T.MOVE(T.TEMP ansAddr, T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4))))],
+                  T.MEM (T.TEMP ansAddr)))
+    end
+
+fun transStringCompare (s1, s2) =
+    let
+        val s1 = unEx s1
+        val s2 = unEx s2
+        val t1 = Temp.newtemp()
+        val t2 = Temp.newtemp()
+        val result = Temp.newtemp()
+    in
+        Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP t1, T.CALL(s1, [])),
+                            T.MOVE(T.TEMP t2, T.CALL(s2, [])),
+                            T.MOVE(T.TEMP result, F.externalCall("stringCompare", [T.TEMP t1, T.TEMP t2]))],
+                  T.TEMP result))
+    end
+
+fun transIntCompare ltOp gtOp (i1, i2) =
+    let val i1 = unEx i1
+        val i2 = unEx i2
+        val ltlabel = Temp.newlabel()
+        val lelabel = Temp.newlabel()
+        val gtlabel = Temp.newlabel()
+        val eqlabel = Temp.newlabel()
+        val endlabel = Temp.newlabel()
+        val result = Temp.newtemp()
+    in
+        Ex(T.ESEQ(Utils.seq[T.CJUMP(gtOp, i1, i2, gtlabel, lelabel),
+                            T.LABEL(gtlabel),
+                            T.MOVE(T.TEMP result, T.CONST 1),
+                            T.JUMP(T.NAME endlabel, [endlabel]),
+                            T.LABEL(lelabel),
+                            T.CJUMP(ltOp, i1, i2, ltlabel, eqlabel),
+                            T.LABEL(ltlabel),
+                            T.MOVE(T.TEMP result, T.CONST ~1),
+                            T.JUMP(T.NAME endlabel, [endlabel]),
+                            T.LABEL(eqlabel),
+                            T.MOVE(T.TEMP result, T.CONST 0),
+                            T.LABEL(endlabel)],
+                  T.TEMP result))
+    end
+
+val transSignedIntCompare = transIntCompare T.LT T.GT
+val transUnsignedIntCompare = transIntCompare T.ULT T.UGT
+
+fun transLet (initExps, body) =
+    Ex(T.ESEQ(Utils.seq(map unNx initExps), unEx body))
+
 end

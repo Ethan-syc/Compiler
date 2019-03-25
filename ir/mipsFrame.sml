@@ -90,22 +90,6 @@ fun procEntryExit3 ({label, formals, offset, numLocals}, body) =
     in
         PROC {body=Utils.seq insns, frame={label=label, formals=formals, offset=offset, numLocals=numLocals}}
     end
-fun allocString (s, frags) =
-  let
-    fun findInList (frag) = case frag of PROC _ => false
-                                       | STRING (label, string) => if string = s then true else false
-    val findResult = List.find findInList (!frags)
-    val stringLabel = case findResult of SOME(STRING(label, string)) => label
-                                       | NONE =>
-                                                let
-                                                  val newLabel = Temp.newlabel()
-                                                  val _ = frags := STRING(newLabel, s)::(!frags)
-                                                in
-                                                  newLabel
-                                                end
-                                       | _ => Temp.newlabel()
-  in
-    stringLabel
-  end
-
+fun allocString (label, literal) =
+    STRING (label, literal)
 end
