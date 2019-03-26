@@ -16,8 +16,8 @@ fun debug msg = if true then print("DEBUG: " ^ msg ^ "\n") else ()
 fun seq [] =
     (debug("Compiler error: seq called on empty list");
      T.LABEL(Temp.newlabel()))
+  | seq [stm1] = stm1
   | seq (stm1::stm2::[]) = T.SEQ(stm1, stm2)
   | seq (stm1::rest) = T.SEQ(stm1, seq(rest))
-
 
 end

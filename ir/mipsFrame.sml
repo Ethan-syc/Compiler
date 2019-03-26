@@ -35,7 +35,8 @@ fun newFrame {name: Temp.label, formals} =
         (* InFrame 0 is the static link *)
         val formals' = (InFrame 0)::(buildFormals formals)
     in
-        {label=name, formals=formals', offset=ref 0, numLocals=ref 1}
+        (* Offset starts at 4 because old FP *)
+        {label=name, formals=formals', offset=ref ~4, numLocals=ref 1}
     end
 
 fun name {label, formals, offset, numLocals} = label
@@ -92,4 +93,7 @@ fun procEntryExit3 ({label, formals, offset, numLocals}, body) =
     end
 fun allocString (label, literal) =
     STRING (label, literal)
+fun printFrag (stream, PROC {body=body, frame=_}) =
+    Printtree.printtree(stream, body)
+  | printFrag (stream, STRING (_, s)) = print("STRING FRAG: " ^ s ^ "\n")
 end

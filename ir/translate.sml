@@ -98,7 +98,7 @@ fun simpleVar ((decLevel: level, access: F.access), useLevel: level) =
                      (case useLevel of INNER {frame=useFrame, parent=parent, unique=r} =>
                                        if l = r
                                        then Ex(F.exp access (T.TEMP F.FP))
-                                       else Ex(F.exp access (followLink (useLevel, decLevel)))
+                                       else Ex(F.exp access (followLink (parent, decLevel)))
                                      | _ => raise InvalidAccess)
                    | _ => raise InvalidAccess
 fun transIf (conde, truee, falsee) =
@@ -187,19 +187,9 @@ fun transBinOp (lefte, righte, oper) =
             oper = A.DivideOp)
         then Ex(T.BINOP(operToBinOp(oper), left, right))
         else
-            let val tl = Temp.newlabel()
-                val fl = Temp.newlabel()
-                val endlabel = Temp.newlabel()
-                val result = Temp.newtemp()
+            let val oper = operToRelOp(oper)
             in
-                Ex(T.ESEQ(Utils.seq[T.CJUMP(operToRelOp(oper), left, right, tl, fl),
-                              T.LABEL(tl),
-                              T.MOVE(T.TEMP result, T.CONST 1),
-                              T.JUMP(T.NAME endlabel, [endlabel]),
-                              T.LABEL(fl),
-                              T.MOVE(T.TEMP result, T.CONST 0),
-                              T.LABEL(endlabel)],
-                          T.TEMP result))
+                Cx(fn(tl, fl) => T.CJUMP(oper, left, right, tl, fl))
             end
     end
 fun transSeqExp [] = Ex (T.CONST 0)
@@ -221,7 +211,7 @@ fun transCall (curLevel, label, funcLevel, args) =
                                         if curUnique = decUnique orelse (#label curFrame) = (#label decFrame)
                                         then Ex(T.CALL(T.NAME label, (T.MEM(T.TEMP F.FP)::(map unEx args))))
                                         else if depth(curLevel) > depth(funcLevel)
-                                        then Ex(T.CALL(T.NAME label, (followLink(curLevel, funcLevel)::(map unEx args))))
+                                        then Ex(T.CALL(T.NAME label, (followLink(parent, funcLevel)::(map unEx args))))
                                         else Ex(T.CALL(T.NAME label, ((T.TEMP F.FP)::(map unEx args))))
                                       | OUTERMOST => (debug("Compiler error: attempting to call in OUTERMOST"); raise Compiler))
 
@@ -233,14 +223,13 @@ fun genMove offset from (exp, moves) =
 fun transRecord (decFields, actualFields) =
     let val addr = Temp.newtemp()
         val len = length(decFields)
-        val genMove = genMove 0 (T.TEMP F.RV)
+        val genMove = genMove 0 (T.TEMP addr)
         val moves = if (length actualFields) = 0
-                    then foldr genMove [] (Utils.arrayMul(Ex(T.CONST 0), len))
-                    else foldr genMove [] actualFields
+                    then foldl genMove [] (Utils.arrayMul(Ex(T.CONST 0), len))
+                    else foldl genMove [] actualFields
+        val moves = rev(moves)
     in
-        Ex(T.ESEQ(Utils.seq([T.EXP(F.externalCall("malloc", [T.CONST(4 * len)])),
-                       T.MOVE(T.TEMP addr, T.TEMP F.RV)]
-                      @ moves),
+        Ex(T.ESEQ(Utils.seq([T.MOVE(T.TEMP addr, F.externalCall("malloc", [T.CONST(4 * len)]))] @ moves),
                   T.TEMP addr))
     end
 
@@ -342,7 +331,7 @@ fun transIntCompare ltOp gtOp (i1, i2) =
 val transSignedIntCompare = transIntCompare T.LT T.GT
 val transUnsignedIntCompare = transIntCompare T.ULT T.UGT
 
-fun transLet (initExps, body) =
-    Ex(T.ESEQ(Utils.seq(map unNx initExps), unEx body))
+fun transLet ([], body) = Ex(unEx body)
+  | transLet (initExps, body) = Ex(T.ESEQ(Utils.seq(map unNx initExps), unEx body))
 
 end

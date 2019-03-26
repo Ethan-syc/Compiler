@@ -26,5 +26,5 @@ and typeToString (RECORD(fields, _)) = "RECORD {" ^ (join (map fieldToString fie
   | typeToString (BOTTOM) = "<ERROR: UNKNOWN>"
   | typeToString (ARRAY(arrType, _)) = "ARRAY of " ^ typeToString(arrType)
   | typeToString (UNIT) = "<NO VALUE>"
-  | typeToString (PENDING func) = "<PEDNING>"
+  | typeToString (PENDING func) = "PENDING: " ^ typeToString(func())
 end

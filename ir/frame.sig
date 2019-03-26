@@ -23,4 +23,5 @@ sig
   val procEntryExit1: frame * Tree.exp -> frag
   val procEntryExit3: frame * Tree.exp -> frag
   val allocString: Temp.label * string -> frag
+  val printFrag: TextIO.outstream * frag -> unit
 end
