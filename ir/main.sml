@@ -1,12 +1,19 @@
 structure Main =
 struct
-fun typeCheck(fileName : string) = Semant.transProg (Parse.parse (fileName))
+fun semant(fileName : string) = Semant.transProg (Parse.parse (fileName))
 fun debug(fileName : string) =
     let
         val ast = Parse.parse(fileName)
         val _ = PrintAbsyn.print(TextIO.stdOut, ast)
+        val _ = Translate.frags := []
+        val frags = Semant.transProg(Parse.parse (fileName))
+        val fragNum = ref 0
+        fun printFrag (f) =
+            (Utils.debug("Printing frag " ^ Int.toString(!fragNum));
+             fragNum := 1 + !fragNum;
+             MipsFrame.printFrag(TextIO.stdOut, f))
     in
-        Semant.transExp(Env.base_venv, Env.base_tenv, Parse.parse (fileName))
+        map printFrag frags
     end
 fun runTests(i) =
     if i > 49

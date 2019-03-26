@@ -21,6 +21,8 @@ temp.sml
 tree.sml
 frame.sig
 mipsFrame.sml
+utils.sml
+FindEscape.sml
 $/basis.cm
 $/smlnj-lib.cm
 $/ml-yacc-lib.cm

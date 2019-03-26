@@ -11,7 +11,7 @@ datatype ty =
          | BOTTOM
          | ARRAY of ty * unique
 	 (* | NAME of Symbol.symbol * ty option ref *)
-         | PENDING of (ty Symbol.table * int) -> ty
+         | PENDING of unit -> ty
          | UNIT
 
 fun join [] = ""
@@ -26,5 +26,5 @@ and typeToString (RECORD(fields, _)) = "RECORD {" ^ (join (map fieldToString fie
   | typeToString (BOTTOM) = "<ERROR: UNKNOWN>"
   | typeToString (ARRAY(arrType, _)) = "ARRAY of " ^ typeToString(arrType)
   | typeToString (UNIT) = "<NO VALUE>"
-  | typeToString (PENDING func) = "<ERROR: PENDING>"
+  | typeToString (PENDING func) = "PENDING: " ^ typeToString(func())
 end
