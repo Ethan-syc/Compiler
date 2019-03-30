@@ -7,15 +7,55 @@ datatype frag = PROC of {body: Tree.stm, frame: frame}
               | STRING of Temp.label * string
 
 structure T = Tree
+structure Tab = Temp.Table
 
+(* Stack pointer *)
 val SP = Temp.newtemp()
+(* Frame pointer *)
 val FP = Temp.newtemp()
+(* Return values *)
+val V1 = Temp.newtemp()
 val RV = Temp.newtemp()
+(* Return address *)
 val RA = Temp.newtemp()
+(* Arguments *)
 val A0 = Temp.newtemp()
 val A1 = Temp.newtemp()
 val A2 = Temp.newtemp()
 val A3 = Temp.newtemp()
+(* Temporaries *)
+val T0 = Temp.newtemp()
+val T1 = Temp.newtemp()
+val T2 = Temp.newtemp()
+val T3 = Temp.newtemp()
+val T4 = Temp.newtemp()
+val T5 = Temp.newtemp()
+val T6 = Temp.newtemp()
+val T7 = Temp.newtemp()
+val T8 = Temp.newtemp()
+val T9 = Temp.newtemp()
+(* Saved registers *)
+val S0 = Temp.newtemp()
+val S1 = Temp.newtemp()
+val S2 = Temp.newtemp()
+val S3 = Temp.newtemp()
+val S4 = Temp.newtemp()
+val S5 = Temp.newtemp()
+val S6 = Temp.newtemp()
+val S7 = Temp.newtemp()
+(* Zero register *)
+val ZERO = Temp.newtemp()
+
+val specialregs = [SP, FP, RV, V1, RA, ZERO]
+val argregs = [A0, A1, A2, A3]
+val calleesaves = [S0, S1, S2, S3, S4, S5, S6, S7]
+val callersaves = [T0, T1, T2, T3, T4, T5, T6, T7, T8, T9]
+
+exception NoSuchReg
+
+val tempMap = Temp.Table.empty
+
+fun string (label, s) = s
 
 fun newFrame {name: Temp.label, formals} =
     let
@@ -96,4 +136,19 @@ fun allocString (label, literal) =
 fun printFrag (stream, PROC {body=body, frame=_}) =
     Printtree.printtree(stream, body)
   | printFrag (stream, STRING (_, s)) = print("STRING FRAG: " ^ s ^ "\n")
+fun regToString reg =
+    case Tab.look(tempMap, reg) of SOME(s) => s
+                                 | _ => Temp.makestring reg
+fun getSpecialReg name =
+    if Utils.toLower(name) = "fp" then FP
+    else if Utils.toLower(name) = "sp" then SP
+    else if Utils.toLower(name) = "v1" then V1
+    else if Utils.inList(["v0", "rv"], Utils.toLower(name)) then RV
+    else if Char.toLower (hd(explode name)) = #"t" then
+        List.nth(callersaves, ord(hd(tl(explode name))) - ord(#"0"))
+    else if Char.toLower (hd(explode name)) = #"s" then
+        List.nth(calleesaves, ord(hd(tl(explode name))) - ord(#"0"))
+    else if Utils.toLower(name) = "zero" then ZERO
+    else if Utils.toLower(name) = "ra" then RA
+    else raise NoSuchReg
 end

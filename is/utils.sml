@@ -5,6 +5,8 @@ structure T = Tree
 (* A specialization of List.exists for bool lists *)
 fun anyOf l = List.exists (fn(x) => x) l
 
+fun inList (l, e: string) = List.exists (fn(x) => (x = e)) l
+
 fun arrayMul (value, 0) = []
   | arrayMul (value, numRepeats) = value::arrayMul (value, numRepeats - 1)
 
@@ -19,5 +21,8 @@ fun seq [] =
   | seq [stm1] = stm1
   | seq (stm1::stm2::[]) = T.SEQ(stm1, stm2)
   | seq (stm1::rest) = T.SEQ(stm1, seq(rest))
+
+fun toLower s =
+    implode (map Char.toLower (explode s))
 
 end

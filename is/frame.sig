@@ -3,7 +3,8 @@ sig
   type frame
   (* in frame or in reg *)
   type access
-  type frag
+  datatype frag = PROC of {body: Tree.stm, frame: frame}
+                | STRING of Temp.label * string
   (* formals is a bool list indicate if param escapes,
      new frame calculate 2 things:
      how the param will be seen from inside the function (in reg/frame)
@@ -24,4 +25,8 @@ sig
   val procEntryExit3: frame * Tree.exp -> frag
   val allocString: Temp.label * string -> frag
   val printFrag: TextIO.outstream * frag -> unit
+  val tempMap: Temp.temp Temp.Table.table
+  val string: Temp.label * string -> string
+  val regToString: Temp.temp -> string
+  val getSpecialReg: string -> Temp.temp
 end
