@@ -177,6 +177,11 @@ fun operToRelOp (A.LtOp) = T.LT
   | operToRelOp (A.EqOp) = T.EQ
   | operToRelOp (A.NeqOp) = T.NE
   | operToRelOp _ = (debug("Compiler error: invalid RelOp"); raise Compiler)
+fun binOpToOp (A.PlusOp) = Int.+
+  | binOpToOp (A.MinusOp) = Int.-
+  | binOpToOp (A.TimesOp) = Int.*
+  | binOpToOp (A.DivideOp) = Int.div
+  | binOpToOp _ = (debug("Compiler error: invalid BinOp"); raise Compiler)
 fun transBinOp (lefte, righte, oper) =
     let val left = unEx(lefte)
         val right = unEx(righte)
@@ -185,7 +190,11 @@ fun transBinOp (lefte, righte, oper) =
             oper = A.MinusOp orelse
             oper = A.TimesOp orelse
             oper = A.DivideOp)
-        then Ex(T.BINOP(operToBinOp(oper), left, right))
+        then
+            case (left, right)
+             of (T.CONST i, T.CONST j) =>
+                Ex(T.CONST (binOpToOp(oper)(i, j)))
+              | _ => Ex(T.BINOP(operToBinOp(oper), left, right))
         else
             let val oper = operToRelOp(oper)
             in

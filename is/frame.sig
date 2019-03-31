@@ -29,4 +29,6 @@ sig
   val string: Temp.label * string -> string
   val regToString: Temp.temp -> string
   val getSpecialReg: string -> Temp.temp
+  val getSpecialRegs: string -> Temp.temp list
+  val arg: int -> Tree.exp
 end

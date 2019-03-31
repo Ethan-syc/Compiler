@@ -25,4 +25,26 @@ fun seq [] =
 fun toLower s =
     implode (map Char.toLower (explode s))
 
+fun binop T.PLUS = "PLUS"
+  | binop T.MINUS = "MINUS"
+  | binop T.MUL = "MUL"
+  | binop T.DIV = "DIV"
+  | binop T.AND = "AND"
+  | binop T.OR = "OR"
+  | binop T.LSHIFT = "LSHIFT"
+  | binop T.RSHIFT = "RSHIFT"
+  | binop T.ARSHIFT = "ARSHIFT"
+  | binop T.XOR = "XOR"
+
+fun relop T.EQ = "EQ"
+  | relop T.NE = "NE"
+  | relop T.LT = "LT"
+  | relop T.GT = "GT"
+  | relop T.LE = "LE"
+  | relop T.GE = "GE"
+  | relop T.ULT = "ULT"
+  | relop T.ULE = "ULE"
+  | relop T.UGT = "UGT"
+  | relop T.UGE = "UGE"
+
 end

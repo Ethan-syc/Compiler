@@ -50,6 +50,7 @@ val specialregs = [SP, FP, RV, V1, RA, ZERO]
 val argregs = [A0, A1, A2, A3]
 val calleesaves = [S0, S1, S2, S3, S4, S5, S6, S7]
 val callersaves = [T0, T1, T2, T3, T4, T5, T6, T7, T8, T9]
+val calldefs = RV::RA::V1::callersaves
 
 exception NoSuchReg
 
@@ -151,4 +152,10 @@ fun getSpecialReg name =
     else if Utils.toLower(name) = "zero" then ZERO
     else if Utils.toLower(name) = "ra" then RA
     else raise NoSuchReg
+fun getSpecialRegs name =
+    case Utils.toLower(name) of "callersaves" => callersaves
+                              | "calldefs" => calldefs
+                              | ("calleesaves" | "temporaries") => calleesaves
+                              | "argregs" => argregs
+                              | "specialregs" => specialregs
 end

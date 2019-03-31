@@ -1,6 +1,7 @@
 .cm/
 *.lex.sml
 *.grm.*
+*.s
 
 # Emacs
 *~

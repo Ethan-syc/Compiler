@@ -8,6 +8,7 @@ fun emitproc out (F.PROC{body,frame}) =
     let val _ = print ("emit " ^ Symbol.name (F.name frame) ^ "\n")
         (* val _ = Printtree.printtree(out,body); *)
 	val stms = Canon.linearize body
+        val _ = TextIO.output(out, "============== Linearized Tree ==============\n")
         val _ = app (fn s => Printtree.printtree(out,s)) stms;
         val stms' = Canon.traceSchedule(Canon.basicBlocks stms)
 	val instrs =   List.concat(map (MipsGen.codegen frame) stms')
@@ -24,11 +25,14 @@ fun withOpenFile fname f =
     end
 
 fun compile filename =
-    let val absyn = Parse.parse filename
+    let val _ = Tr.frags := []
+        val absyn = Parse.parse filename
         val frags = (FindEscape.prog absyn; Semant.transProg absyn)
     in
         withOpenFile (filename ^ ".s")
-	             (fn out => (app (emitproc out) frags))
+	             (fn out =>
+                         (TextIO.output(out, "====================================\n");
+                          app (emitproc out) frags))
     end
 
 end

@@ -13,8 +13,8 @@ fun genR (name: string, dst: Temp.temp list, src: Temp.temp list, shamt: int opt
         in
             if Utils.inList(["sllv", "srlv", "srav"], name)
                            (* These instructions have their src operands flipped... *)
-            then name ^ " $" ^ rd ^ ", $" ^ rt ^ ", $" ^ rs
-            else name ^ " $" ^ rd ^ ", $" ^ rs ^ ", $" ^ rt
+            then name ^ " $" ^ rd ^ ", $" ^ rt ^ ", $" ^ rs ^ "\n"
+            else name ^ " $" ^ rd ^ ", $" ^ rs ^ ", $" ^ rt ^ "\n"
         end
     else if Utils.inList(["sll", "srl", "sra"], name)
     then
@@ -25,27 +25,27 @@ fun genR (name: string, dst: Temp.temp list, src: Temp.temp list, shamt: int opt
             val rd = format(hd dst)
             val rt = format(hd src)
         in
-            name ^ " $" ^ rd ^ ", $" ^ rt ^ ", " ^ Int.toString shamt
+            name ^ " $" ^ rd ^ ", $" ^ rt ^ ", " ^ Int.toString shamt ^ "\n"
         end
     else if Utils.inList(["jr", "mthi", "mtlo"], name)
     then
         let
             val rs = format(hd src)
         in
-            name ^ " $" ^ rs
+            name ^ " $" ^ rs ^ "\n"
         end
     else if Utils.inList(["mfhi", "mflo"], name)
     then
         let val rd = format(hd dst)
         in
-            name ^ " $" ^ rd
+            name ^ " $" ^ rd ^ "\n"
         end
     else if Utils.inList(["mult", "multu", "div", "divu"], name)
     then
         let val rs = format(hd src)
             val rt = format(hd (tl src))
         in
-            name ^ " $" ^ rs ^ ", $" ^ rt
+            name ^ " $" ^ rs ^ ", $" ^ rt ^ "\n"
         end
     else (Utils.debug("Compiler error: unknown R-instruction: " ^ name);
           "<ERROR>")
@@ -56,20 +56,20 @@ fun genI (name, dst: Temp.temp list, src: Temp.temp list, imm: int) format =
         let val rt = format(hd dst)
             val rs = format(hd src)
         in
-            name ^ " $" ^ rt ^ ", $" ^ rs ^ ", " ^ Int.toString imm
+            name ^ " $" ^ rt ^ ", $" ^ rs ^ ", " ^ Int.toString imm ^ "\n"
         end
     else if Utils.inList(["lui"], name)
     then
         let val rt = format(hd dst)
         in
-            name ^ " $" ^ rt ^ ", " ^ Int.toString imm
+            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "\n"
         end
     else if Utils.inList(["lb", "lh", "lw", "lbu", "lhu"], name)
     then
         let val rt = format(hd dst)
             val rs = format(hd src)
         in
-            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")"
+            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")" ^ "\n"
         end
     else if Utils.inList(["sb", "sh", "sw"], name)
     then
@@ -77,14 +77,14 @@ fun genI (name, dst: Temp.temp list, src: Temp.temp list, imm: int) format =
         let val rt = format(hd src)
             val rs = format(hd (tl src))
         in
-            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")"
+            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")" ^ "\n"
         end
     else
         (Utils.debug("Compiler error: unknown I-instruction: " ^ name);
          "<ERROR>")
 fun genJ (name, lab) format =
     if Utils.inList(["j", "jal"], name)
-    then name ^ " " ^ Symbol.name lab
+    then name ^ " " ^ Symbol.name lab ^ "\n"
     else (Utils.debug("Compiler error: unknown J-instruction: " ^ name);
           "<ERROR>")
 

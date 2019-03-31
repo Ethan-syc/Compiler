@@ -7,6 +7,7 @@ structure A = Assem
 structure MA = MipsAssem
 
 val ZERO = F.getSpecialReg "ZERO"
+val RV = F.getSpecialReg "RV"
 
 fun codegen frame stm =
     let val ilist = ref []
@@ -36,7 +37,67 @@ fun codegen frame stm =
                              src=[e],
                              jump=SOME([l1])})
             end
-          (* TODO: CJUMP with other relops *)
+          | munchStm (T.CJUMP(T.EQ, e1, e2, l1, l2)) =
+            let val src = [munchExp e1, munchExp e2]
+            in
+                emit(A.OPER {assem=MA.genB("beq", src, l1),
+                             dst=[],
+                             src=src,
+                             jump=SOME([l1])})
+            end
+          | munchStm (T.CJUMP(T.NE, e1, e2, l1, l2)) =
+            let val src = [munchExp e1, munchExp e2]
+            in
+                emit(A.OPER {assem=MA.genB("bne", src, l1),
+                             dst=[],
+                             src=src,
+                             jump=SOME([l1])})
+            end
+          | munchStm (T.CJUMP(T.LT, e1, T.CONST i, l1, l2) |
+                      T.CJUMP(T.GE, T.CONST i, e1, l1, l2)) =
+            let val e1 = munchExp e1
+                val t = Temp.newtemp()
+            in
+                emit(A.OPER {assem=MA.genI("slti", [t], [e1], i),
+                             dst=[t],
+                             src=[e1],
+                             jump=NONE});
+                emit(A.OPER {assem=MA.genB("bne", [t, ZERO], l1),
+                             dst=[],
+                             src=[t, ZERO],
+                             jump=SOME([l1])})
+            end
+          | munchStm (T.CJUMP(T.LT, e1, e2, l1, l2) |
+                      T.CJUMP(T.GE, e2, e1, l1, l2)) =
+            let val e1 = munchExp e1
+                val e2 = munchExp e2
+                val t = Temp.newtemp()
+            in
+                emit(A.OPER {assem=MA.genR("slt", [t], [e1, e2], NONE),
+                             dst=[t],
+                             src=[e1, e2],
+                             jump=NONE});
+                emit(A.OPER {assem=MA.genB("bne", [t, ZERO], l1),
+                             dst=[],
+                             src=[t, ZERO],
+                             jump=SOME([l1])})
+            end
+          | munchStm (T.CJUMP(T.LE, e1, e2, l1, l2) |
+                      T.CJUMP(T.GT, e2, e1, l1, l2)) =
+            let val src = [munchExp e1, munchExp e2]
+                val t = Temp.newtemp()
+            in
+                emit(A.OPER {assem=MA.genR("sub", [t], src, NONE),
+                             dst=[t],
+                             src=src,
+                             jump=NONE});
+                emit(A.OPER {assem=MA.genB("blez", [t], l1),
+                             dst=[],
+                             src=[t],
+                             jump=SOME([l1])})
+            end
+          | munchStm (T.CJUMP(relop, _, _, _, _)) =
+            Utils.debug("Compiler error: RELOP " ^ Utils.relop relop ^ " was never generated.")
           | munchStm (T.MOVE(T.MEM(T.BINOP(T.PLUS, e1, T.CONST i)), e2) |
                       T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, e1)), e2)) =
             (* MIPS: sw e2, i(e1) *)
@@ -97,7 +158,162 @@ fun codegen frame stm =
                              src=src})
             end
           | munchStm (T.EXP e) = (munchExp(e); ())
-        and munchExp e = Temp.newtemp()
+        and munchExp (T.MEM(T.BINOP(T.PLUS, e1, T.CONST i)) |
+                      T.MEM(T.BINOP(T.PLUS, T.CONST i, e1))) =
+            let val e1 = munchExp(e1)
+            in
+                result(fn (r) => emit(A.OPER {assem=MA.genI("lw", [r], [e1], i),
+                                              dst=[r],
+                                              src=[e1],
+                                              jump=NONE}))
+            end
+          | munchExp (T.MEM(e)) =
+            let val e = munchExp(e)
+            in
+                result(fn (r) => emit(A.OPER {assem=MA.genI("lw", [r], [e], 0),
+                                              dst=[r],
+                                              src=[e],
+                                              jump=NONE}))
+            end
+          | munchExp (T.TEMP i) = i
+          | munchExp (T.ESEQ(stm, exp)) = (munchStm(stm); munchExp(exp))
+          | munchExp (T.NAME(label)) =
+            (Utils.debug("Compiler error: standalone T.NAME");
+             Temp.newtemp())
+          | munchExp (T.CONST i) =
+            result(fn (r) => emit(A.OPER {assem=MA.genI("addi", [r], [ZERO], i),
+                                          dst=[r],
+                                          src=[ZERO],
+                                          jump=NONE}))
+          | munchExp (T.CALL(T.NAME label, args)) =
+            let fun munchArgs (i, nil) = nil
+                  | munchArgs (i, (arg::args)) =
+                    let val arg = munchExp(arg)
+                        val dst = F.arg i
+                        val _ = munchStm(T.MOVE(dst, T.TEMP arg))
+                    in
+                        case dst of T.TEMP t => t::munchArgs(i + 1, args)
+                                  | _ => munchArgs(i + 1, args)
+                    end
+                val calldefs = F.getSpecialRegs "calldefs"
+            in
+                result(fn (r) => (emit(A.OPER {assem=MA.genJ("jal", label),
+                                               dst=calldefs,
+                                               src=munchArgs(0, args),
+                                               jump=SOME([label])});
+                                  emit(A.OPER {assem=MA.genMove(r, RV),
+                                               dst=[r],
+                                               src=[RV],
+                                               jump=NONE})))
+            end
+          | munchExp (T.CALL(_)) =
+            (Utils.debug("Compiler error: call destination not a label");
+             Temp.newtemp())
+          | munchExp (T.BINOP(T.PLUS, e, T.CONST i) |
+                      T.BINOP(T.PLUS, T.CONST i, e)) =
+            let val e = munchExp e
+            in
+                result(fn (r) => emit(A.OPER {assem=MA.genI("addi", [r], [e], i),
+                                              dst=[r],
+                                              src=[e],
+                                              jump=NONE}))
+            end
+          | munchExp (T.BINOP(T.PLUS, e1, e2)) =
+            let val e1 = munchExp(e1)
+                val e2 = munchExp(e2)
+            in
+                result(fn (r) => emit(A.OPER {assem=MA.genR("add", [r], [e1, e2], NONE),
+                                              dst=[r],
+                                              src=[e1, e2],
+                                              jump=NONE}))
+            end
+          | munchExp (T.BINOP(T.MINUS, e, T.CONST i)) =
+            let val e = munchExp e
+            in
+                result(fn (r) => emit(A.OPER {assem=MA.genI("addi", [r], [e], ~i),
+                                              dst=[r],
+                                              src=[e],
+                                              jump=NONE}))
+            end
+          | munchExp (T.BINOP(T.MINUS, e1, e2)) =
+            let val e1 = munchExp(e1)
+                val e2 = munchExp(e2)
+            in
+                result(fn (r) => emit(A.OPER {assem=MA.genR("sub", [r], [e1, e2], NONE),
+                                              dst=[r],
+                                              src=[e1, e2],
+                                              jump=NONE}))
+            end
+          | munchExp (T.BINOP(T.MUL, e1, T.CONST i) |
+                      T.BINOP(T.MUL, T.CONST i, e1)) =
+            let val e1 = munchExp(e1)
+                val power = IntInf.log2 (IntInf.fromInt i)
+            in
+                if IntInf.toInt (IntInf.pow(IntInf.fromInt 2, power)) = i
+                then result(fn (r) =>
+                               emit(A.OPER {assem=MA.genR("sll", [r], [e1], SOME(power)),
+                                            dst=[r],
+                                            src=[e1],
+                                            jump=NONE}))
+                else
+                    let val r = Temp.newtemp()
+                    in
+                        emit(A.OPER {assem=MA.genI("addi", [r], [ZERO], i),
+                                     dst=[r],
+                                     src=[ZERO],
+                                     jump=NONE});
+                        munchExp(T.BINOP(T.MUL, T.TEMP e1, T.TEMP r))
+                    end
+            end
+          | munchExp (T.BINOP(T.MUL, e1, e2)) =
+            let val src = [munchExp e1, munchExp e2]
+                val result = Temp.newtemp()
+            in
+                emit(A.OPER {assem=MA.genR("mult", [], src, NONE),
+                             dst=[],
+                             src=src,
+                             jump=NONE});
+                emit(A.OPER {assem=MA.genR("mflo", [result], [], NONE),
+                             dst=[result],
+                             src=[],
+                             jump=NONE});
+                result
+            end
+          | munchExp (T.BINOP(T.DIV, e, T.CONST i)) =
+            let val e = munchExp(e)
+                val power = IntInf.log2 (IntInf.fromInt i)
+            in
+                if IntInf.toInt (IntInf.pow(IntInf.fromInt 2, power)) = i
+                then result(fn (r) => emit(A.OPER {assem=MA.genR("sra", [r], [e], SOME(power)),
+                                                   dst=[r],
+                                                   src=[e],
+                                                   jump=NONE}))
+                else let val r = Temp.newtemp()
+                     in
+                        emit(A.OPER {assem=MA.genI("addi", [r], [ZERO], i),
+                                     dst=[r],
+                                     src=[ZERO],
+                                     jump=NONE});
+                        munchExp(T.BINOP(T.DIV, T.TEMP e, T.TEMP r))
+                     end
+            end
+          | munchExp (T.BINOP(T.DIV, e1, e2)) =
+            let val src = [munchExp e1, munchExp e2]
+                val result = Temp.newtemp()
+            in
+                emit(A.OPER {assem=MA.genR("div", [], src, NONE),
+                             dst=[],
+                             src=src,
+                             jump=NONE});
+                emit(A.OPER {assem=MA.genR("mflo", [result], [], NONE),
+                             dst=[result],
+                             src=[],
+                             jump=NONE});
+                result
+            end
+          | munchExp (T.BINOP(binop, _, _)) =
+            (Utils.debug("Compiler error: BINOP " ^ Utils.binop binop ^ " was never generated.");
+             Temp.newtemp())
     in
         munchStm stm;
         rev(!ilist)
