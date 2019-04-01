@@ -54,7 +54,7 @@ fun resolvePending (TY.PENDING(func)) = func()
 
 fun checkIsLoopVariable (var, venv, pos) =
     case var of A.SimpleVar(varname, varpos) =>
-                (case (S.look(venv, varname)) of SOME(E.VarEntry {access, ty, loopVar, escape}) => loopVar
+                (case (S.look(venv, varname)) of SOME(E.VarEntry {access, ty, loopVar}) => loopVar
                                                | _ => false)
               | _ => false
 
@@ -319,8 +319,8 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
 
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}) =
             let
-                val access = Translate.allocLocal level (FindEscape.find (venv, var))
-                val newVenv = S.enter(venv, var, E.VarEntry{access=access, ty=TY.INT, loopVar=true, escape=ref false})
+                val access = Translate.allocLocal level (!escape)
+                val newVenv = S.enter(venv, var, E.VarEntry{access=access, ty=TY.INT, loopVar=true})
                 val {exp=loExp, ty=loTy} = trexp(lo)
                 val {exp=hiExp, ty=hiTy} = trexp(hi)
                 val _ = doCheckSameType(TY.INT, loTy, pos)
@@ -363,7 +363,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                 val _ = debug("SimpleVar: " ^ S.name symbol)
             in
                 case S.look(venv, symbol)
-                 of SOME(E.VarEntry {access, ty, loopVar, escape}) =>
+                 of SOME(E.VarEntry {access, ty, loopVar}) =>
                     let
                         val exp = TR.simpleVar(access, level)
                     in
@@ -437,10 +437,10 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
             foldl (fn (dec, {venv=venv, tenv=tenv}) => transDec(venv, tenv, dec, level, break, initExps)) {venv=venv, tenv=tenv} decs
         and transDec (venv, tenv, dec, level, break, initExps) =
             case dec
-             of A.VarDec {name=name, typ=typ, init=init, pos=pos, ...} =>
+             of A.VarDec {name, escape, typ, init, pos} =>
                 let
                     val {exp=initExp, ty=initType} = transExp(venv, tenv, init, level, break)
-                    val access = TR.allocLocal level (FindEscape.find (venv, name))
+                    val access = TR.allocLocal level (!escape)
                     val varExp = TR.simpleVar(access, level)
                     val exp = TR.transAssign(varExp, initExp)
                     val _ = initExps := exp::(!initExps)
@@ -452,29 +452,27 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                                     val initType = case initType of TY.PENDING(func) => func()
                                                                   | ty => ty
                                 in
-                                    case initType of TY.NIL =>
-                                                     (err(pos, "Long form must be used if init-exp is NIL.");
-                                                      {tenv=tenv,
-                                                       venv=S.enter(venv, name, E.VarEntry{
-                                                                        access=access,
-                                                                        ty=TY.BOTTOM,
-                                                                        loopVar=false,
-                                                                        escape=ref false})})
-                                                   | TY.UNIT =>
-                                                     (err(pos, "Cannot define a variable with no value.");
-                                                      err(pos, "Hint: init-exp returns no value");
-                                                      {tenv=tenv,
-                                                       venv=S.enter(venv, name, E.VarEntry{
-                                                                        access=access,
-                                                                        ty=TY.BOTTOM,
-                                                                        loopVar=false,
-                                                                        escape=ref false})})
-                                                   | _ => {tenv=tenv,
-                                                           venv=S.enter(venv, name, E.VarEntry{
-                                                                            access=access,
-                                                                            ty=initType,
-                                                                            loopVar=false,
-                                                                            escape=ref false})}
+                                    case initType
+                                     of TY.NIL =>
+                                        (err(pos, "Variable type must be explicitly named if init-exp is NIL.");
+                                         {tenv=tenv,
+                                          venv=S.enter(venv, name, E.VarEntry{
+                                                           access=access,
+                                                           ty=TY.BOTTOM,
+                                                           loopVar=false})})
+                                      | TY.UNIT =>
+                                        (err(pos, "Cannot define a variable with no value.");
+                                         err(pos, "Hint: init-exp returns no value");
+                                         {tenv=tenv,
+                                          venv=S.enter(venv, name, E.VarEntry{
+                                                           access=access,
+                                                           ty=TY.BOTTOM,
+                                                           loopVar=false})})
+                                      | _ => {tenv=tenv,
+                                              venv=S.enter(venv, name, E.VarEntry{
+                                                               access=access,
+                                                               ty=initType,
+                                                               loopVar=false})}
                                 end
                               | SOME(symbol, pos) =>
                                 (* If a variable type is specified, first check the type of the init exp.
@@ -490,62 +488,96 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                                             val _ = doCheckSameType(symbolType, initType, pos)
                                         in
                                             {tenv=tenv,
-                                             venv=S.enter(venv, name, E.VarEntry{access=access,
+                                             venv=S.enter(venv, name, E.VarEntry{
+                                                              access=access,
                                                               ty=symbolType,
-                                                              loopVar=false,
-                                                              escape=ref false})}
+                                                              loopVar=false})}
                                         end
                                       | NONE =>
                                         (err(pos, "Type " ^ S.name symbol ^ " is not found");
                                          {tenv=tenv,
                                           venv=S.enter(venv, name, E.VarEntry{access=access,
                                                                               ty=TY.BOTTOM,
-                                                                              loopVar=false,
-                                                                              escape=ref false})})
+                                                                              loopVar=false})})
                                 end
 
                 end
               | A.FunctionDec (decs) =>
                 let
-                    fun transParam {name, typ, pos, escape} =
-                        case S.look(tenv, typ) of SOME t => {name=name, ty=t}
-                                                | NONE =>
-                                                  (err(pos, "Type " ^ S.name typ ^ " is not found"); {name=name, ty=TY.BOTTOM})
-                    fun enterParam ({name, ty}, venv) =
-                        let
-                            val access = TR.allocLocal level (FindEscape.find(venv, name))
+                    fun transParam ({name=name, params=params, ...}: A.fundec, paramTable) =
+                        (* Turns a A.field into a E.VarEntry *)
+                        let fun helper ({name, escape, typ, pos}: A.field) =
+                                let val access = TR.allocLocal level (!escape)
+                                in
+                                    case S.look(tenv, typ)
+                                     of SOME t =>
+                                        E.VarEntry{
+                                            access=access,
+                                            ty=t,
+                                            loopVar=false}
+                                      | NONE =>
+                                        (err(pos, "Type "
+                                                  ^ S.name typ
+                                                  ^ " is not found");
+                                         E.VarEntry{
+                                             access=access,
+                                             ty=TY.BOTTOM,
+                                             loopVar=false})
+                                end
+                            val entries = map helper params
                         in
-                            S.enter(venv, name, E.VarEntry{access=access, ty=ty, loopVar=false, escape=ref false})
+                            S.enter(paramTable, name, entries)
                         end
+                    val paramTable = foldl transParam S.empty decs
                     fun checkFunctionHeader ({name, params, body, pos, result}, venv) =
                         let
-                            val params' = map #ty (map transParam params)
+                            val params = valOf(S.look(paramTable, name))
+                            val paramTypes = map (fn (E.VarEntry {ty=ty, ...}) => ty) params
                             (* If a return type is specified, it must exist. Otherwise, it's a procedure
-                                       returning TY.UNIT *)
+                               returning TY.UNIT *)
                             val result_ty = case result
                                              of SOME(rt, _) =>
-                                                (case S.look(tenv, rt) of SOME(ty) => ty
-                                                                        | NONE => (err(pos, "Type " ^ S.name rt ^ " is not found"); TY.BOTTOM))
+                                                (case S.look(tenv, rt)
+                                                  of SOME(ty) => ty
+                                                   | NONE => (err(pos, "Type "
+                                                                       ^ S.name rt
+                                                                       ^ " is not found");
+                                                              TY.BOTTOM))
                                               | NONE => TY.UNIT
                             val label = Temp.newlabel()
                         in
-                            S.enter(venv, name, E.FunEntry{level=level, label=label, formals=params', result=result_ty})
+                            (* We need to enter the function into the original venv, *)
+                            (* not the one with its params, i.e. venv' *)
+                            S.enter(venv,
+                                    name,
+                                    E.FunEntry{
+                                        level=level,
+                                        label=label,
+                                        formals=paramTypes,
+                                        result=result_ty})
                         end
                     fun checkFunctionDec ({name, params, body: A.exp, pos, result}, {venv: venvType, tenv: tenvType}) =
                         let
                             (* We are guaranteed to have this symbol in venv because checkFunctionHeader
                                will have been run *)
-                            val entry = case valOf (S.look(venv, name)) of E.FunEntry entry => entry
-                                                                         | _ => (debug("Compiler error: "
-                                                                                       ^ S.name name
-                                                                                       ^ " is not a FunEntry in venv");
-                                                                                 errorFunEntry)
+                            val entry = case valOf (S.look(venv, name))
+                                         of E.FunEntry entry => entry
+                                          | _ => (Utils.error("Compiler error: "
+                                                              ^ S.name name
+                                                              ^ " is not a FunEntry in venv");
+                                                  errorFunEntry)
                             val resultType = #result entry
-                            val params' = map transParam params
-                            val venv' = foldl enterParam venv params'
-                            val formals = map (fn(x) => false) params'
+                            val varEntries = valOf(S.look(paramTable, name))
+                            fun enterParam ({name=name, ...}: A.field, entry, venv) =
+                                S.enter(venv, name, entry)
+                            val venv' = ListPair.foldl enterParam venv (params, varEntries)
+                            val formals = map op! (map #escape params)
                             val newLevel = TR.newLevel {parent=level, name=(#label entry), formals=formals}
-                            val _ = debug("Function " ^ S.name name ^ " creates level " ^ Int.toString (TR.depth newLevel))
+                            val _ = Utils.info("Function "
+                                               ^ S.name name
+                                               ^ "(" ^ S.name (#label entry) ^ ")"
+                                               ^ " creates level "
+                                               ^ Int.toString (TR.depth newLevel))
                             val {exp=body, ty=actualReturn} = transExp(venv', tenv, body, newLevel, break)
                             val _ = TR.procEntryExit(newLevel, body)
                             val _ = if not (doCheckSameType(resultType, actualReturn, pos))

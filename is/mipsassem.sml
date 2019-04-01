@@ -11,8 +11,8 @@ fun genR (name: string, dst: Temp.temp list, src: Temp.temp list, shamt: int opt
             val rs = format(hd src)
             val rt = format(hd (tl src))
         in
+            (* These instructions have their src operands flipped... *)
             if Utils.inList(["sllv", "srlv", "srav"], name)
-                           (* These instructions have their src operands flipped... *)
             then name ^ " $" ^ rd ^ ", $" ^ rt ^ ", $" ^ rs ^ "\n"
             else name ^ " $" ^ rd ^ ", $" ^ rs ^ ", $" ^ rt ^ "\n"
         end

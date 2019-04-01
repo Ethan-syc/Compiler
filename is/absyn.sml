@@ -20,7 +20,7 @@ and exp = VarExp of var
         | RecordExp of {fields: (symbol * exp * pos) list,
 			typ: symbol, pos: pos}
         | WhileExp of {test: exp, body: exp, pos: pos}
-	      | ForExp of {var: symbol, escape: bool ref,
+	| ForExp of {var: symbol, escape: bool ref,
 		     lo: exp, hi: exp, body: exp, pos: pos}
         | BreakExp of pos
         | ArrayExp of {typ: symbol, size: exp, init: exp, pos: pos}

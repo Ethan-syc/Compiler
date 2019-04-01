@@ -27,7 +27,7 @@ fun withOpenFile fname f =
 fun compile filename =
     let val _ = Tr.frags := []
         val absyn = Parse.parse filename
-        val frags = (FindEscape.prog absyn; Semant.transProg absyn)
+        val frags = (Temp.reset(); FindEscape.findEscape absyn; Semant.transProg absyn)
     in
         withOpenFile (filename ^ ".s")
 	             (fn out =>

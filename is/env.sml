@@ -2,7 +2,7 @@ structure Env :> ENV =
 struct
   type access = unit
   type ty = Types.ty
-  datatype enventry = VarEntry of {access: Translate.access, ty: ty, loopVar: bool, escape: bool ref}
+  datatype enventry = VarEntry of {access: Translate.access, ty: ty, loopVar: bool}
                     | FunEntry of {level: Translate.level,
                                    label: Temp.label,
                                    formals: ty list, result: ty}

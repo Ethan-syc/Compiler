@@ -51,6 +51,7 @@ end
 let
   var x: int := 3
   var y: int := 4
+  function f(x: int, b: int): int = x + b
 in
-  x + y
+  f(x + y, 2)
 end
