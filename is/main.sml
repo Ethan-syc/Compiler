@@ -6,19 +6,16 @@ structure F = MipsFrame
 
 fun emitproc out (F.PROC{body,frame}) =
     let val _ = print ("emit " ^ Symbol.name (F.name frame) ^ "\n")
-        (* val _ = Printtree.printtree(out,body); *)
-	(* val stms = Canon.linearize body *)
-        (* val stms' = Canon.traceSchedule(Canon.basicBlocks stms) *)
         val stms = (Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body
-        val _ = TextIO.output(out, "============== Tree ==============\n")
-        val _ = app (fn s => Printtree.printtree(out,s)) stms;
+        (* val _ = TextIO.output(out, "============== Tree ==============\n") *)
+        (* val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
         val entryExit = fn (instrs) => F.procEntryExit2(frame, instrs)
         val codegen = MipsGen.codegen frame
 	val instrs = List.concat(map (entryExit o codegen) stms)
         (* todo: call procEntryExit3 *)
         val format0 = FormatAssem.format(Temp.makestring)
     in
-        TextIO.output(out, "============== Assembly =============\n");
+        (* TextIO.output(out, "============== Assembly =============\n"); *)
         app (fn i => TextIO.output(out,format0 i)) instrs
     end
   | emitproc out (F.STRING(lab,s)) = TextIO.output(out,F.string(lab,s))
@@ -36,9 +33,9 @@ fun compile filename =
     in
         withOpenFile (filename ^ ".s")
 	             (fn out =>
-                         (TextIO.output(out, "================ AST ===============\n");
-                          PrintAbsyn.print(out, absyn);
-                          app (emitproc out) frags))
+                         (* (TextIO.output(out, "================ AST ===============\n"); *)
+                         (*  PrintAbsyn.print(out, absyn); *)
+                         (app (emitproc out) frags))
     end
 
 end

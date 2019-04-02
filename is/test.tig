@@ -63,7 +63,14 @@ end
 */
 
 let
-  function f(x: int) = x + 1
+  type rec = {a: int}
+  function f(x: int, y: rec): int =
+    let var x: string := "abc"
+        function g(): int = y.a + 1
+    in
+        g()
+    end
+  var my_y: rec := rec {a=1}
 in
-  f(3)
+  f(3, my_y)
 end
