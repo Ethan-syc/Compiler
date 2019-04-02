@@ -12,14 +12,19 @@ fun makestring t = "t" ^ Int.toString t
 
 type label = Symbol.symbol
 val labs = ref 0
+fun reset () = (temps := 128; labs := 0)
+fun resetzero () = (temps := 100; labs := 0)
 
-local structure F = Format
-      fun postinc x = let val i = !x in x := i+1; i end
+local
+    structure F = Format
+    fun postinc x =
+        let val i = !x
+        in x := i+1;
+           i
+        end
 in
 fun newlabel() = Symbol.symbol(F.format "L%d" [F.INT(postinc labs)])
 val namedlabel = Symbol.symbol
 end
-
-fun reset () = (temps := 100; labs := 0)
 
 end

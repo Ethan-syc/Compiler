@@ -22,13 +22,14 @@ table.sig
 table.sml
 temp.sig
 temp.sml
-tiger.grm.sig
-tiger.grm.sml
-tiger.lex.sml
+tiger.grm
+tiger.lex
 translate.sml
 tree.sml
 types.sml
 utils.sml
+log.sml
+format.sml
 
 codegen.sig
 codegen.sml

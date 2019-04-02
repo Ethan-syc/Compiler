@@ -13,14 +13,14 @@ fun genR (name: string, dst: Temp.temp list, src: Temp.temp list, shamt: int opt
         in
             (* These instructions have their src operands flipped... *)
             if Utils.inList(["sllv", "srlv", "srav"], name)
-            then name ^ " $" ^ rd ^ ", $" ^ rt ^ ", $" ^ rs ^ "\n"
-            else name ^ " $" ^ rd ^ ", $" ^ rs ^ ", $" ^ rt ^ "\n"
+            then (name ^ " $" ^ rd ^ ", $" ^ rt ^ ", $" ^ rs ^ "\n")
+            else (name ^ " $" ^ rd ^ ", $" ^ rs ^ ", $" ^ rt ^ "\n")
         end
     else if Utils.inList(["sll", "srl", "sra"], name)
     then
         let
             val shamt = case shamt of SOME(i) => i
-                                    | NONE => (Utils.debug("Compiler error: shamt not given for inst " ^ name);
+                                    | NONE => (Log.error("Compiler error: shamt not given for inst " ^ name);
                                                0)
             val rd = format(hd dst)
             val rt = format(hd src)
@@ -47,7 +47,7 @@ fun genR (name: string, dst: Temp.temp list, src: Temp.temp list, shamt: int opt
         in
             name ^ " $" ^ rs ^ ", $" ^ rt ^ "\n"
         end
-    else (Utils.debug("Compiler error: unknown R-instruction: " ^ name);
+    else (Log.error("Compiler error: unknown R-instruction: " ^ name);
           "<ERROR>")
 
 fun genI (name, dst: Temp.temp list, src: Temp.temp list, imm: int) format =
@@ -80,13 +80,22 @@ fun genI (name, dst: Temp.temp list, src: Temp.temp list, imm: int) format =
             name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")" ^ "\n"
         end
     else
-        (Utils.debug("Compiler error: unknown I-instruction: " ^ name);
+        (Log.error("Compiler error: unknown I-instruction: " ^ name);
          "<ERROR>")
 fun genJ (name, lab) format =
     if Utils.inList(["j", "jal"], name)
     then name ^ " " ^ Symbol.name lab ^ "\n"
-    else (Utils.debug("Compiler error: unknown J-instruction: " ^ name);
+    else (Log.error("Compiler error: unknown J-instruction: " ^ name);
           "<ERROR>")
+
+fun genLA (name, dst: Assem.temp list, lab) format =
+    let val dst = format(hd dst)
+    in
+        if name <> "la"
+        then (Log.error("Compiler error: la instruction required. Got " ^ name);
+              "<ERROR>")
+        else ("la $" ^ dst ^ ", " ^ Symbol.name lab ^ "\n")
+    end
 
 fun genB (name, src, lab) format =
     if Utils.inList(["blez", "bgtz"], name)
@@ -103,10 +112,10 @@ fun genB (name, src, lab) format =
         in
             name ^ " $" ^ rs ^ ", $" ^ rt ^ ", " ^ genLabel lab
         end
-    else (Utils.debug("Compiler error: unknown branch instruction: " ^ name);
+    else (Log.error("Compiler error: unknown branch instruction: " ^ name);
           "<ERROR>")
 and genMove (temp1, temp2) format =
     (* Moves temp2 into temp1 *)
-    "add $" ^ format temp1 ^ ", $" ^ format temp2 ^ ", $" ^ format ZERO
+    "add $" ^ format temp1 ^ ", $" ^ format temp2 ^ ", $" ^ format ZERO ^ "\n"
 and genLabel l = Symbol.name l ^ "\n"
 end

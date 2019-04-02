@@ -15,12 +15,12 @@ fun traverseVar (env: escEnv, d: depth, s: A.var): unit =
                 of SOME(decDepth, r) =>
                    if decDepth < d
                    then (r := true;
-                         Utils.debug("Variable "
+                         Log.debug("Variable "
                                      ^ S.name symbol
                                      ^ " escapes at pos "
                                      ^ Int.toString pos))
                    else ()
-                 | NONE => Utils.warning("Variable "
+                 | NONE => Log.warning("Variable "
                                          ^ S.name symbol
                                          ^ " was never declared."))
             | A.FieldVar (var, _, _) => traverseVar(env, d, var)
@@ -72,9 +72,9 @@ and traverseDecs (env: escEnv, d: depth, s: A.dec list): escEnv =
                 S.enter(env, name, (d, escape))
               | A.FunctionDec decs =>
                 let fun traverseFuncDec ({name, params, result, body, pos}) =
-                        let val _ = Utils.debug("Entering declaration for function " ^ S.name name)
+                        let val _ = Log.debug("Entering declaration for function " ^ S.name name)
                             fun enterParam ({name, escape, typ, pos}, env) =
-                                S.enter(env, name, (d, escape))
+                                S.enter(env, name, (d + 1, escape))
                             (* Create new environment with params *)
                             val env' = foldl enterParam env params
                             (* And apply it to the body at depth d + 1 *)

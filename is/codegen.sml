@@ -16,7 +16,7 @@ fun codegen frame stm =
         fun munchStm (T.SEQ(a, b)) = (munchStm(a); munchStm(b))
           | munchStm (T.LABEL(l)) = emit(A.LABEL{assem=MA.genLabel(l), lab=l})
           | munchStm (T.JUMP(T.NAME lab, labs)) = emit(A.OPER {assem=MA.genJ("j", lab), dst=[], src=[], jump=SOME(labs)})
-          | munchStm (T.JUMP(_)) = Utils.debug("Compiler error: jump instruction without label")
+          | munchStm (T.JUMP(_)) = Log.debug("Compiler error: jump instruction without label")
           | munchStm (T.CJUMP(T.LE, e, T.CONST 0, l1, l2) |
                       T.CJUMP(T.GT, T.CONST 0, e, l1, l2)) =
             (* MIPS: blez e, l1 *)
@@ -68,7 +68,7 @@ fun codegen frame stm =
                              jump=SOME([l1])})
             end
           | munchStm (T.CJUMP(T.LT, e1, e2, l1, l2) |
-                      T.CJUMP(T.GE, e2, e1, l1, l2)) =
+                      T.CJUMP(T.GT, e2, e1, l1, l2)) =
             let val e1 = munchExp e1
                 val e2 = munchExp e2
                 val t = Temp.newtemp()
@@ -83,7 +83,7 @@ fun codegen frame stm =
                              jump=SOME([l1])})
             end
           | munchStm (T.CJUMP(T.LE, e1, e2, l1, l2) |
-                      T.CJUMP(T.GT, e2, e1, l1, l2)) =
+                      T.CJUMP(T.GE, e2, e1, l1, l2)) =
             let val src = [munchExp e1, munchExp e2]
                 val t = Temp.newtemp()
             in
@@ -97,7 +97,7 @@ fun codegen frame stm =
                              jump=SOME([l1])})
             end
           | munchStm (T.CJUMP(relop, _, _, _, _)) =
-            Utils.debug("Compiler error: RELOP " ^ Utils.relop relop ^ " was never generated.")
+            Log.debug("Compiler error: RELOP " ^ Utils.relop relop ^ " was never generated.")
           | munchStm (T.MOVE(T.MEM(T.BINOP(T.PLUS, e1, T.CONST i)), e2) |
                       T.MOVE(T.MEM(T.BINOP(T.PLUS, T.CONST i, e1)), e2)) =
             (* MIPS: sw e2, i(e1) *)
@@ -125,6 +125,12 @@ fun codegen frame stm =
                              src=[e2, e1],
                              jump=NONE})
             end
+          | munchStm (T.MOVE(T.TEMP t, T.CONST i)) =
+            (* MIPS: addi $t, $0, i *)
+            emit(A.OPER {assem=MA.genI("addi", [t], [ZERO], i),
+                         dst=[t],
+                         src=[ZERO],
+                         jump=NONE})
           | munchStm (T.MOVE(T.TEMP i, e)) =
             (* MIPS: addi $i, e, 0 *)
             let val e = munchExp(e)
@@ -146,7 +152,7 @@ fun codegen frame stm =
                              jump=NONE})
             end
           | munchStm (T.MOVE(T.CONST i, _)) =
-            Utils.debug("Compiler error: moving into constant")
+            Log.debug("Compiler error: moving into constant")
           | munchStm (T.MOVE(e1, e2)) =
             (* The most generic case *)
             (* MIPS: add e1, e2, $0 *)
@@ -178,8 +184,10 @@ fun codegen frame stm =
           | munchExp (T.TEMP i) = i
           | munchExp (T.ESEQ(stm, exp)) = (munchStm(stm); munchExp(exp))
           | munchExp (T.NAME(label)) =
-            (Utils.debug("Compiler error: standalone T.NAME");
-             Temp.newtemp())
+            result(fn (r) => emit(A.OPER {assem=MA.genLA("la", [r], label),
+                                          dst=[r],
+                                          src=[],
+                                          jump=NONE}))
           | munchExp (T.CONST i) =
             result(fn (r) => emit(A.OPER {assem=MA.genI("addi", [r], [ZERO], i),
                                           dst=[r],
@@ -196,18 +204,21 @@ fun codegen frame stm =
                                   | _ => munchArgs(i + 1, args)
                     end
                 val calldefs = F.getSpecialRegs "calldefs"
-            in
-                result(fn (r) => (emit(A.OPER {assem=MA.genJ("jal", label),
+                val r = Temp.newtemp()
+                val insns = [A.OPER {assem=MA.genJ("jal", label),
                                                dst=calldefs,
                                                src=munchArgs(0, args),
-                                               jump=SOME([label])});
-                                  emit(A.OPER {assem=MA.genMove(r, RV),
+                                               jump=SOME([label])},
+                             A.OPER {assem=MA.genMove(r, RV),
                                                dst=[r],
                                                src=[RV],
-                                               jump=NONE})))
+                                               jump=NONE}]
+            in
+                map emit insns;
+                r
             end
           | munchExp (T.CALL(_)) =
-            (Utils.debug("Compiler error: call destination not a label");
+            (Log.debug("Compiler error: call destination not a label");
              Temp.newtemp())
           | munchExp (T.BINOP(T.PLUS, e, T.CONST i) |
                       T.BINOP(T.PLUS, T.CONST i, e)) =
@@ -312,7 +323,7 @@ fun codegen frame stm =
                 result
             end
           | munchExp (T.BINOP(binop, _, _)) =
-            (Utils.debug("Compiler error: BINOP " ^ Utils.binop binop ^ " was never generated.");
+            (Log.debug("Compiler error: BINOP " ^ Utils.binop binop ^ " was never generated.");
              Temp.newtemp())
     in
         munchStm stm;

@@ -6,6 +6,7 @@ structure TY = Types
 structure S = Symbol
 structure E = Env
 structure TR = Translate
+structure T = Tree
 
 type venvType = E.enventry S.table
 type tenvType = E.ty S.table
@@ -199,6 +200,8 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
           | trexp (A.AssignExp {var, exp, pos}) =
             let
                 val {exp=varExp, ty=varTy} = trvar (var)
+                val _ = case varExp of TR.Ex(T.ESEQ(_, T.MEM(_))) => Log.debug("is mem")
+                                     | _ => Log.debug("is not mem")
                 val isLoopVaribale = checkIsLoopVariable(var, venv, pos)
                 val {exp=expExp, ty=expTy} = trexp(exp)
                 val _ = doCheckSameType(varTy, expTy, pos)
@@ -330,7 +333,8 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                 val {exp=bodyExp, ty=bodyTy} = transExp(newVenv, tenv, body, level, breakLabel)
                 val _ = exitLoop()
                 val isNoValue = doCheckSameType(TY.UNIT, bodyTy, pos)
-                val exp = TR.transFor(loExp, hiExp, bodyExp, breakLabel)
+                val loopVar = TR.simpleVar(access, level)
+                val exp = TR.transFor(loopVar, loExp, hiExp, bodyExp, breakLabel)
             in
                 if isNoValue
                 then {exp=exp, ty=TY.UNIT}
@@ -353,14 +357,10 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
           | trexp (A.BreakExp pos) = (inLoop(pos); {exp=TR.transBreak(break), ty=TY.UNIT})
 
         (* get the type of provided var, return expty *)
-        and trvar (A.SimpleVar(symbol, pos)) = transSimpleVar (symbol, pos)
-          | trvar (A.FieldVar(var, symbol, pos)) = transFieldVar (var, symbol, pos)
-          | trvar (A.SubscriptVar(var, exp, pos)) = transSubscriptVar (var, exp, pos)
-        (* check the type of the provided simpleVar, return expty *)
-        and transSimpleVar (symbol, pos) =
+        and trvar (A.SimpleVar(symbol, pos)) =
             (* Level is when variable is used.  *)
             let
-                val _ = debug("SimpleVar: " ^ S.name symbol)
+                val _ = Log.debug("SimpleVar: " ^ S.name symbol)
             in
                 case S.look(venv, symbol)
                  of SOME(E.VarEntry {access, ty, loopVar}) =>
@@ -372,11 +372,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                     end
                   | _ => errAndBottom(pos, TR.transConst 0, S.name symbol ^ " not declared or not a variable")
             end
-
-        (* check the type of the provided fieldVar, return expty *)
-        and transFieldVar (var, symbol, pos) =
+          | trvar (A.FieldVar(var, symbol, pos)) =
             let
-                val _ = debug("FieldVar: " ^ S.name symbol)
+                val _ = Log.debug("FieldVar: " ^ S.name symbol)
                 fun err(pos, var, exp, actualType) =
                     errAndBottom(pos, exp, "Expected "
                                            ^ varToString var
@@ -404,8 +402,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                             end
                          | _ => err(pos, var, exp, ty)
             end
-        (* check the type of subscriptVar, return expty *)
-        and transSubscriptVar (var, exp, pos) =
+          | trvar (A.SubscriptVar(var, exp, pos)) =
             let
                 fun err(pos, var, exp, actualType) =
                     errAndBottom(pos, exp, "Expected "
@@ -484,7 +481,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                                     case symbolTy
                                      of SOME(symbolType) =>
                                         let
-                                            val _ = debug(S.name symbol ^ " is " ^ TY.typeToString symbolType)
+                                            val _ = Log.debug(S.name symbol ^ " is " ^ TY.typeToString symbolType)
                                             val _ = doCheckSameType(symbolType, initType, pos)
                                         in
                                             {tenv=tenv,
@@ -562,9 +559,9 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                                will have been run *)
                             val entry = case valOf (S.look(venv, name))
                                          of E.FunEntry entry => entry
-                                          | _ => (Utils.error("Compiler error: "
-                                                              ^ S.name name
-                                                              ^ " is not a FunEntry in venv");
+                                          | _ => (Log.error("Compiler error: "
+                                                            ^ S.name name
+                                                            ^ " is not a FunEntry in venv");
                                                   errorFunEntry)
                             val resultType = #result entry
                             val varEntries = valOf(S.look(paramTable, name))
@@ -573,11 +570,11 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                             val venv' = ListPair.foldl enterParam venv (params, varEntries)
                             val formals = map op! (map #escape params)
                             val newLevel = TR.newLevel {parent=level, name=(#label entry), formals=formals}
-                            val _ = Utils.info("Function "
-                                               ^ S.name name
-                                               ^ "(" ^ S.name (#label entry) ^ ")"
-                                               ^ " creates level "
-                                               ^ Int.toString (TR.depth newLevel))
+                            val _ = Log.info("Function "
+                                             ^ S.name name
+                                             ^ "(" ^ S.name (#label entry) ^ ")"
+                                             ^ " creates level "
+                                             ^ Int.toString (TR.depth newLevel))
                             val {exp=body, ty=actualReturn} = transExp(venv', tenv, body, newLevel, break)
                             val _ = TR.procEntryExit(newLevel, body)
                             val _ = if not (doCheckSameType(resultType, actualReturn, pos))
@@ -651,7 +648,7 @@ and transTy(venv, tenv, decs) =
                 let
                     val unique = case S.look(uniques, name)
                                   of SOME(unique) => unique
-                                   | NONE => (debug("Compiler error: cannot find unique for ARRAY "
+                                   | NONE => (Log.debug("Compiler error: cannot find unique for ARRAY "
                                                    ^ S.name name);
                                               ref ());
                 in
@@ -664,7 +661,7 @@ and transTy(venv, tenv, decs) =
                             val fieldList = map helper fields
                             val unique = case S.look(uniques, name)
                                           of SOME(unique) => unique
-                                           | NONE => (debug("Compiler error: cannot find unique for "
+                                           | NONE => (Log.debug("Compiler error: cannot find unique for "
                                                             ^ S.name name);
                                                       ref ())
                         in
@@ -719,7 +716,7 @@ fun transProg (AST_expression:A.exp) =
         val level = TR.newLevel {parent=TR.outermost, name=Temp.namedlabel("tig_main"), formals=[]}
         val breakLabel = Temp.newlabel()
         val {exp=exp, ty=ty} = transExp(E.base_venv, E.base_tenv, AST_expression, level, breakLabel)
-        val _ = debug("Final type: " ^ TY.typeToString(ty))
+        val _ = Log.debug("Final type: " ^ TY.typeToString(ty))
         val mainFrag = TR.procEntryExit(level, exp)
     in
         TR.getResult()

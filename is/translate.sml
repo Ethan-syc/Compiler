@@ -26,7 +26,6 @@ val frags: F.frag list ref = ref []
 (* Access to variables / functions in OUTERMOST level *)
 exception InvalidAccess
 exception Compiler
-val debug = Utils.debug
 
 fun unEx (Ex e) = e
   | unEx (Cx genstm) =
@@ -44,7 +43,7 @@ fun unEx (Ex e) = e
 
 fun unCx (Cx f) = f
   | unCx (Ex e) = (fn(t, f) => T.CJUMP(T.NE, e, T.CONST 0, t, f))
-  | unCx (Nx _) = (debug("Compiler error: Nx used as condition");
+  | unCx (Nx _) = (Log.error("Compiler error: Nx used as condition");
                    (fn(t, f) => T.LABEL(Temp.newlabel())))
 
 fun unNx (Nx s) = s
@@ -85,10 +84,10 @@ fun allocLocal level escape =
 
 fun followLink (curLevel, targetLevel) =
     case curLevel of OUTERMOST =>
-                     (debug("Compiler error: followed link to OUTERMOST"); raise Compiler)
+                     (Log.error("Compiler error: followed link to OUTERMOST"); raise Compiler)
                    | INNER {frame=curFrame, parent=parent, unique=curUnique} =>
                      (case targetLevel of OUTERMOST =>
-                                          (debug("Compiler error: OUTERMOST has no static link"); raise Compiler)
+                                          (Log.error("Compiler error: OUTERMOST has no static link"); raise Compiler)
                                         | INNER {frame=targetFrame, parent=_, unique=targetUnique} =>
                                           if curUnique = targetUnique
                                           then T.MEM(T.TEMP F.FP)
@@ -132,8 +131,8 @@ fun transWhile (body, cond, breakLabel) =
                T.LABEL breakLabel])
     end
 
-fun transFor (starte, ende, body, breakLabel) =
-    let val r = Temp.newtemp()
+fun transFor (loopVar, starte, ende, body, breakLabel) =
+    let val r = unEx loopVar
         val rend = Temp.newtemp()
         val start' = unEx starte
         val end' = unEx ende
@@ -141,14 +140,14 @@ fun transFor (starte, ende, body, breakLabel) =
         val l3 = Temp.newlabel()
         val body' = unNx body
     in
-        Nx(Utils.seq[T.MOVE (T.TEMP r, start'),
+        Nx(Utils.seq[T.MOVE (r, start'),
                T.MOVE (T.TEMP rend, end'),
-               T.CJUMP (T.LE, T.TEMP r, T.TEMP rend, l1, breakLabel),
+               T.CJUMP (T.LE, r, T.TEMP rend, l1, breakLabel),
                T.LABEL l3,
-               T.EXP (T.BINOP (T.PLUS, T.TEMP r, T.CONST 1)),
+               T.EXP (T.BINOP (T.PLUS, r, T.CONST 1)),
                T.LABEL l1,
                body',
-               T.CJUMP (T.LT, T.TEMP r, T.TEMP rend, l3, breakLabel),
+               T.CJUMP (T.LT, r, T.TEMP rend, l3, breakLabel),
                T.LABEL breakLabel])
     end
 
@@ -169,19 +168,19 @@ fun operToBinOp (A.PlusOp) = T.PLUS
   | operToBinOp (A.MinusOp) = T.MINUS
   | operToBinOp (A.TimesOp) = T.MUL
   | operToBinOp (A.DivideOp) = T.DIV
-  | operToBinOp _ = (debug("Compiler error: invalid BinOp"); raise Compiler)
+  | operToBinOp _ = (Log.error("Compiler error: invalid BinOp"); raise Compiler)
 fun operToRelOp (A.LtOp) = T.LT
   | operToRelOp (A.LeOp) = T.LE
   | operToRelOp (A.GtOp) = T.GT
   | operToRelOp (A.GeOp) = T.GE
   | operToRelOp (A.EqOp) = T.EQ
   | operToRelOp (A.NeqOp) = T.NE
-  | operToRelOp _ = (debug("Compiler error: invalid RelOp"); raise Compiler)
+  | operToRelOp _ = (Log.error("Compiler error: invalid RelOp"); raise Compiler)
 fun binOpToOp (A.PlusOp) = Int.+
   | binOpToOp (A.MinusOp) = Int.-
   | binOpToOp (A.TimesOp) = Int.*
   | binOpToOp (A.DivideOp) = Int.div
-  | binOpToOp _ = (debug("Compiler error: invalid BinOp"); raise Compiler)
+  | binOpToOp _ = (Log.error("Compiler error: invalid BinOp"); raise Compiler)
 fun transBinOp (lefte, righte, oper) =
     let val left = unEx(lefte)
         val right = unEx(righte)
@@ -222,7 +221,7 @@ fun transCall (curLevel, label, funcLevel, args) =
                                         else if depth(curLevel) > depth(funcLevel)
                                         then Ex(T.CALL(T.NAME label, (followLink(parent, funcLevel)::(map unEx args))))
                                         else Ex(T.CALL(T.NAME label, ((T.TEMP F.FP)::(map unEx args))))
-                                      | OUTERMOST => (debug("Compiler error: attempting to call in OUTERMOST"); raise Compiler))
+                                      | OUTERMOST => (Log.error("Compiler error: attempting to call in OUTERMOST"); raise Compiler))
 
 fun genMove offset from (exp, moves) =
     let val curOffset = 4 * (length moves) + offset
@@ -244,21 +243,23 @@ fun transRecord (decFields, actualFields) =
 
 fun transArray (initExp, len) =
     let val initExp = unEx initExp
-        val len = unEx len
+        val len' = unEx len
         val addr = Temp.newtemp()
-        val actualLen = Temp.newtemp()
         val actualAddr = Temp.newtemp()
+        val actualLen = unEx (transBinOp(len, Ex (T.CONST 1), A.PlusOp))
     in
-        Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP actualLen, len),
-                            T.MOVE(T.TEMP addr, F.externalCall("malloc", [T.TEMP actualLen])),
+        Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP addr, F.externalCall("malloc", [actualLen])),
                             T.MOVE(T.TEMP actualAddr, T.BINOP(T.PLUS, T.TEMP addr, T.CONST(4))),
-                            T.EXP(F.externalCall("initArray", [T.TEMP actualAddr, initExp, T.TEMP actualLen]))],
+                            T.MOVE(T.MEM(T.TEMP addr), len'),
+                            T.EXP(F.externalCall("initArray", [T.TEMP actualAddr, initExp, len']))],
                   T.TEMP actualAddr))
     end
 
-fun procEntryExit (OUTERMOST, body) = (debug("Compiler error: Function declaration in OUTERMOST"); raise Compiler)
+fun procEntryExit (OUTERMOST, body) = (Log.error("Compiler error: Function declaration in OUTERMOST");
+                                       raise Compiler)
   | procEntryExit (INNER {frame, parent, unique}, body) =
     let
+        val _ = Log.debug("Generating frag for function " ^ Symbol.name (#label frame))
         val proc = F.procEntryExit1(frame, unEx body)
         val _ = frags := (proc::(!frags))
     in
@@ -279,12 +280,10 @@ fun transSubscriptVar (arrayExp, offset) =
         val lnext = Temp.newlabel()
     in
         (* error if offset >= size | offset < 0 *)
-        Ex(T.ESEQ(Utils.seq[
-                       T.EXP(F.externalCall("boundsCheck", [
-                                               T.MEM(T.BINOP(T.MINUS, addr, T.CONST 4)),
-                                               offset])),
-                       T.MOVE(T.TEMP ansAddr, T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4))))],
-                  T.MEM(T.TEMP ansAddr)))
+        Ex(T.ESEQ(T.EXP(F.externalCall("boundsCheck",
+                                       [T.MEM(T.BINOP(T.PLUS, addr, T.CONST ~4)),
+                                        offset])),
+                  T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4)))))
     end
 
 fun transFieldVar (recordExp, offset) =
@@ -293,9 +292,8 @@ fun transFieldVar (recordExp, offset) =
         val offset = unEx offset
         val ansAddr = Temp.newtemp()
     in
-        Ex(T.ESEQ(Utils.seq[T.EXP(F.externalCall("checkNil", [addr])),
-                            T.MOVE(T.TEMP ansAddr, T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4))))],
-                  T.MEM (T.TEMP ansAddr)))
+        Ex(T.ESEQ(T.EXP(F.externalCall("checkNil", [addr])),
+                  T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4)))))
     end
 
 fun transStringCompare (s1, s2) =

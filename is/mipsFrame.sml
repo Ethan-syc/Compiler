@@ -7,8 +7,10 @@ datatype frag = PROC of {body: Tree.stm, frame: frame}
               | STRING of Temp.label * string
 
 structure T = Tree
+structure S = Symbol
 structure Tab = Temp.Table
 
+val _ = Temp.resetzero()
 (* Stack pointer *)
 val SP = Temp.newtemp()
 (* Frame pointer *)
@@ -54,9 +56,41 @@ val calldefs = RV::RA::V1::callersaves
 
 exception NoSuchReg
 
-val tempMap = Temp.Table.empty
+fun addSpecialReg ((temp, name), table) =
+    (Log.debug("Temp " ^ Int.toString temp ^ " is " ^ name);
+     Temp.Table.enter(table, temp, name))
 
-fun string (label, s) = s
+val tempMap = foldl addSpecialReg Temp.Table.empty [
+        (SP, "sp"),
+        (FP, "fp"),
+        (V1, "v1"),
+        (RV, "v0"),
+        (RA, "ra"),
+        (A0, "a0"),
+        (A1, "a1"),
+        (A2, "a2"),
+        (A3, "a3"),
+        (T0, "t0"),
+        (T1, "t1"),
+        (T2, "t2"),
+        (T3, "t3"),
+        (T4, "t4"),
+        (T5, "t5"),
+        (T6, "t6"),
+        (T7, "t7"),
+        (T8, "t8"),
+        (T9, "t9"),
+        (S0, "s0"),
+        (S1, "s1"),
+        (S2, "s2"),
+        (S3, "s3"),
+        (S4, "s4"),
+        (S5, "s5"),
+        (S6, "s6"),
+        (S7, "s7"),
+        (ZERO, "0")]
+
+fun string (label, s) = (Symbol.name label) ^ "\n" ^ s ^ "\n"
 
 fun newFrame {name: Temp.label, formals} =
     let
@@ -89,13 +123,20 @@ fun numLocals {label, formals, offset, numLocals} = !numLocals
 (* Allocates new local variable in the frame *)
 fun allocLocal {label, formals, offset, numLocals} escape =
     if not escape
-    then (InReg(Temp.newtemp()))
+    then (
+        Log.debug("Allocating InReg for frame " ^ S.name label);
+        InReg(Temp.newtemp())
+    )
     else
         let
             val _ = numLocals := !numLocals + 1
             (* grows down *)
             val _ = offset := !offset - 4
         in
+            Log.debug("Allocating InFrame("
+                        ^ Int.toString (!offset)
+                        ^ ") for frame "
+                        ^ S.name label);
             InFrame(!offset)
         end
 
@@ -109,29 +150,37 @@ fun arg 0 = T.TEMP(A0)
   | arg n = T.MEM(T.BINOP(T.PLUS, T.TEMP(SP), T.CONST(4 * n)))
 fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel s), args)
-fun procEntryExit1 (frame, body) = PROC {body=T.EXP body, frame=frame}
-fun procEntryExit3 ({label, formals, offset, numLocals}, body) =
-    let val numLocals' = !numLocals
-        fun viewShift (arg', formal, moves) =
-            let val formal = exp formal (T.TEMP SP)
-                val arg' = arg arg'
-            in
-                (T.MOVE(formal, arg'))::moves
-            end
-        val args = Utils.range(0, length formals)
-        val moves = ListPair.foldr viewShift [] (args, formals)
-        val result = Temp.newtemp()
-        val insns = (T.LABEL label)::moves
-                    @ [T.MOVE(T.BINOP(T.MINUS, T.TEMP(SP), T.CONST(4)), T.TEMP(FP)),
-                       T.MOVE(T.TEMP(FP), T.TEMP(SP)),
-                       T.MOVE(T.TEMP(SP), T.BINOP(T.MINUS, T.TEMP(SP), T.CONST(numLocals' * 4))),
-                       T.MOVE(T.TEMP(RV), body),
-                       T.MOVE(T.TEMP(SP), T.BINOP(T.PLUS, T.TEMP(SP), T.CONST(numLocals' * 4))),
-                       T.MOVE(T.TEMP(FP), T.BINOP(T.MINUS, T.TEMP(SP), T.CONST(4))),
-                       T.JUMP(T.TEMP(RA), [])]
-    in
-        PROC {body=Utils.seq insns, frame={label=label, formals=formals, offset=offset, numLocals=numLocals}}
-    end
+fun procEntryExit1 (frame, body) = PROC {body=T.SEQ(T.LABEL(#label frame), T.EXP body), frame=frame}
+fun procEntryExit2 (frame, body) = body@[Assem.OPER {assem=fn (x) => "",
+                                                     src=[ZERO, RA, SP]@calleesaves,
+                                                     dst=[],
+                                                     jump=SOME([])}]
+(* fun procEntryExit3 ({label, formals, offset, numLocals}, body) = *)
+(*     let val numLocals' = !numLocals *)
+(*         fun viewShift (arg', formal, moves) = *)
+(*             let val formal = exp formal (T.TEMP SP) *)
+(*                 val arg' = arg arg' *)
+(*             in *)
+(*                 (T.MOVE(formal, arg'))::moves *)
+(*             end *)
+(*         val args = Utils.range(0, length formals) *)
+(*         val moves = ListPair.foldr viewShift [] (args, formals) *)
+(*         val result = Temp.newtemp() *)
+(*         val insns = (T.LABEL label)::moves *)
+(*                     @ [T.MOVE(T.BINOP(T.MINUS, T.TEMP(SP), T.CONST(4)), T.TEMP(FP)), *)
+(*                        T.MOVE(T.TEMP(FP), T.TEMP(SP)), *)
+(*                        T.MOVE(T.TEMP(SP), T.BINOP(T.MINUS, T.TEMP(SP), T.CONST(numLocals' * 4))), *)
+(*                        T.MOVE(T.TEMP(RV), body), *)
+(*                        T.MOVE(T.TEMP(SP), T.BINOP(T.PLUS, T.TEMP(SP), T.CONST(numLocals' * 4))), *)
+(*                        T.MOVE(T.TEMP(FP), T.BINOP(T.MINUS, T.TEMP(SP), T.CONST(4))), *)
+(*                        T.JUMP(T.TEMP(RA), [])] *)
+(*     in *)
+(*         PROC {body=Utils.seq insns, frame={label=label, formals=formals, offset=offset, numLocals=numLocals}} *)
+(*     end *)
+fun procEntryExit3 ({label=name, formals=formals, offset=_, numLocals=numLocals}, body: Assem.instr list) =
+    {prolog="PROCEDURE " ^ Symbol.name name ^ "\n",
+     body=body,
+     epilog="END " ^ Symbol.name name ^ "\n"}
 fun allocString (label, literal) =
     STRING (label, literal)
 fun printFrag (stream, PROC {body=body, frame=_}) =
@@ -158,4 +207,5 @@ fun getSpecialRegs name =
                               | ("calleesaves" | "temporaries") => calleesaves
                               | "argregs" => argregs
                               | "specialregs" => specialregs
+                              | _ => raise NoSuchReg
 end

@@ -22,10 +22,11 @@ sig
   val exp : access -> Tree.exp -> Tree.exp
   val externalCall: string * Tree.exp list -> Tree.exp
   val procEntryExit1: frame * Tree.exp -> frag
-  val procEntryExit3: frame * Tree.exp -> frag
+  val procEntryExit2: frame * Assem.instr list -> Assem.instr list
+  val procEntryExit3: frame * Assem.instr list -> {prolog: string, body: Assem.instr list, epilog: string}
   val allocString: Temp.label * string -> frag
   val printFrag: TextIO.outstream * frag -> unit
-  val tempMap: Temp.temp Temp.Table.table
+  val tempMap: string Temp.Table.table
   val string: Temp.label * string -> string
   val regToString: Temp.temp -> string
   val getSpecialReg: string -> Temp.temp
