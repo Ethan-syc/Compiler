@@ -11,6 +11,8 @@ flowgraph.sml
 frame.sig
 graph.sig
 graph.sml
+funcgraph.sig
+funcgraph.sml
 main.sml
 mipsFrame.sml
 parse.sml
@@ -30,12 +32,11 @@ types.sml
 utils.sml
 log.sml
 format.sml
-
 codegen.sig
 codegen.sml
-
 mipsassem.sml
-
+makegraph.sml
+liveness.sml
 $/basis.cm
 $/smlnj-lib.cm
 $/ml-yacc-lib.cm

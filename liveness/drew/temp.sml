@@ -4,13 +4,15 @@ struct
 
     val labelCount = ref 0
     val temps = ref 100
-
+    structure Table = IntMapTable(type key = int
+    			      fun getInt n = n)
     fun reset () =
 	let val () = temps := 100
 	    val () = labelCount := 0
 	in
 	    ()
 	end
+  fun resetzero () = (temps := 100; labs := 0)
 
 
     fun newtemp() =
@@ -39,8 +41,6 @@ struct
 	    Symbol.symbol name
 	end
     val namedlabel = Symbol.symbol
-    structure Table = IntMapTable(type key = int
-    			      fun getInt n = n)
-    fun resetzero () = (temps := 100; labs := 0)
+
 
 end

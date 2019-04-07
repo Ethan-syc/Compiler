@@ -1,30 +1,48 @@
-(* make this an abstraction sometime *)
 structure Temp : TEMP =
 struct
-type temp = int
-val temps = ref 100
-fun newtemp() = let val t = !temps in temps := t+1; t end
+    type temp = int
+    val compare=Int.compare
+    val labelCount = ref 0
+    val labs = ref 0
+    val temps = ref 100
+    structure Table = IntMapTable(type key = int
+    			      fun getInt n = n)
+    fun reset () =
+	let val () = temps := 100
+	    val () = labelCount := 0
+	in
+	    ()
+	end
+  fun resetzero () = (temps := 100; labs := 0)
 
-structure Table = IntMapTable(type key = int
-			      fun getInt n = n)
 
-fun makestring t = "t" ^ Int.toString t
+    fun newtemp() =
+	let val t  = !temps
+	    val () = temps := t+1
+	in
+	    t
+	end
+    fun makestring t = "t" ^ Int.toString t
 
-type label = Symbol.symbol
-val labs = ref 0
-fun reset () = (temps := 128; labs := 0)
-fun resetzero () = (temps := 100; labs := 0)
+    type label = Symbol.symbol
 
-local
-    structure F = Format
-    fun postinc x =
-        let val i = !x
-        in x := i+1;
-           i
-        end
-in
-fun newlabel() = Symbol.symbol(F.format "L%d" [F.INT(postinc labs)])
-val namedlabel = Symbol.symbol
-end
+    structure TempOrd =
+    struct
+      type ord_key = temp
+      val compare = compare
+    end
+
+    structure Set = SplaySetFn(TempOrd)
+    structure Map = SplayMapFn(TempOrd)
+
+    fun newlabel() =
+	let val x  = !labelCount
+	    val () = labelCount := x +1
+      val name = "L" ^ Int.toString (x)
+	in
+	    Symbol.symbol name
+	end
+    val namedlabel = Symbol.symbol
+
 
 end
