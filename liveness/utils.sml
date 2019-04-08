@@ -20,6 +20,10 @@ fun seq [] =
   | seq (stm1::stm2::[]) = T.SEQ(stm1, stm2)
   | seq (stm1::rest) = T.SEQ(stm1, seq(rest))
 
+fun join s ([]) = ""
+  | join s ([e]) = e
+  | join s (e::rest) = e ^ s ^ (join s rest)
+
 fun toLower s =
     implode (map Char.toLower (explode s))
 

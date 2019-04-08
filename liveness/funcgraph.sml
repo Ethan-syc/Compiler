@@ -1,14 +1,14 @@
-functor FuncGraph(K:ORD_KEY) : FUNCGRAPH where type nodeID = K.ord_key=
+functor FuncGraph(K:ORD_KEY) : FUNCGRAPH where type nodeID = K.ord_key =
 struct
 structure Key = K
 type nodeID = Key.ord_key
 structure NodeSet = SplaySetFn(Key)
 structure NodeMap = SplayMapFn(Key)
 structure EdgeKey = struct type ord_key = {from:nodeID,to:nodeID}
-		    fun compare({from=f1,to=t1},{from=f2,to=t2}) =
-			case Key.compare(f1,f2) of
-			    EQUAL => Key.compare(t1,t2)
-			  | x => x
+		           fun compare({from=f1,to=t1},{from=f2,to=t2}) =
+			       case Key.compare(f1,f2) of
+			           EQUAL => Key.compare(t1,t2)
+			         | x => x
 		    end
 structure EdgeSet = SplaySetFn(EdgeKey)
 
@@ -59,12 +59,12 @@ fun removeEdge'(g,{from,to}) = adjustSets(g,{from=from,to=to},NodeSet.delete)
 
 
 fun doubleEdge (g, temp1, temp2) = case Key.compare(temp1,temp2) of
-  EQUAL => g
-|  _ => let
-           val g' = addEdge(g, {from = temp1, to = temp2})
-        in
-          addEdge(g', {from = temp2, to = temp1})
-        end
+                                       EQUAL => g
+                                    |  _ => let
+                                        val g' = addEdge(g, {from = temp1, to = temp2})
+                                    in
+                                        addEdge(g', {from = temp2, to = temp1})
+                                    end
 
 
 fun removeNode(g,nid) =
@@ -107,11 +107,11 @@ fun foldPreds f init (_,_,_,p) = NodeSet.foldl f init p
 fun foldPreds' g f init (_,_,_,p) = NodeSet.foldl (fn(nid,x)=>f(getNode(g,nid),x)) init p
 
 fun isAdjacent ((n1,_,s1,p1),(n2,_,s2,p2)) =
-  NodeSet.member(NodeSet.union(s1,p1),n2) orelse
-  NodeSet.member(NodeSet.union(s2,p2),n1)
+    NodeSet.member(NodeSet.union(s1,p1),n2) orelse
+    NodeSet.member(NodeSet.union(s2,p2),n1)
 
-fun printGraph stringify g =
-    let fun println x = print(x ^"\n")
+fun printGraph stringify out g =
+    let fun println x = TextIO.output(out, x ^"\n")
 	fun stringNid nid =
 	    let val (_,data,_,_) = getNode(g,nid)
 	    in

@@ -24,7 +24,7 @@ fun log level msg =
         let val date = Date.fromTimeLocal(Time.now())
             val levelname = loglevelToName level
         in
-            print((Date.fmt "%c" date) ^ " " ^ levelname ^ ": " ^ msg ^ "\n")
+            print((Date.fmt (date, "%c")) ^ " " ^ levelname ^ ": " ^ msg ^ "\n")
         end
     else ()
 
