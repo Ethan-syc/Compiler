@@ -57,8 +57,7 @@ val calldefs = RV::RA::V1::callersaves
 exception NoSuchReg
 
 fun addSpecialReg ((temp, name), table) =
-    (Log.debug("Temp " ^ Int.toString temp ^ " is " ^ name);
-     Temp.Table.enter(table, temp, name))
+    Temp.Table.enter(table, temp, name)
 
 val tempMap = foldl addSpecialReg Temp.Table.empty [
         (SP, "sp"),

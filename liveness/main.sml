@@ -8,8 +8,10 @@ fun compileproc out (F.PROC{body,frame}, instrs) =
     let val frameName = Symbol.name (F.name frame)
         val _ = print ("compiling " ^ frameName ^ "\n")
         val stms = (Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body
-        (* val _ = TextIO.output(out, "============== Tree (" ^ frameName ^ ") ==============\n") *)
-        (* val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
+        val _ = if (!Log.loglevel) <= Log.DEBUG then
+                    (TextIO.output(out, "============== Tree (" ^ frameName ^ ") ==============\n");
+                     app (fn s => Printtree.printtree(out,s)) stms)
+                else ()
         val entryExit = fn (instrs) => F.procEntryExit2(frame, instrs)
         val codegen = MipsGen.codegen frame
     in
@@ -20,11 +22,14 @@ fun compileproc out (F.PROC{body,frame}, instrs) =
 fun emit out instrs =
     let (* todo: call procEntryExit3 *)
         val format0 = FormatAssem.format(Temp.makestring)
-        (* val _ = TextIO.output(out, "============== Assembly =============\n"); *)
         fun printInstr (instr, i) =
             (TextIO.output(out, Int.toString i ^ ": " ^ format0 instr); i + 1)
     in
-        (* foldl printInstr 0 instrs *)
+        if (!Log.loglevel) <= Log.DEBUG then
+            (TextIO.output(out, "============== Assembly =============\n");
+             foldl printInstr 0 instrs;
+             ())
+        else ();
         app (fn (instr) => TextIO.output(out, format0 instr)) instrs
     end
 
@@ -40,11 +45,12 @@ fun dataflow out instrs =
                 nodeID ^ ": Def: " ^ def ^ ", Use: " ^ use
             end
     in
-        (* TextIO.output(out, "============== Control Flow =============\n"); *)
-        (* Flow.Graph.printGraph printFlowGraphNode out control; *)
-        (* TextIO.output(out, "============== Liveness =============\n"); *)
-        (* Liveness.show(out, igraph) *)
-        ()
+        if (!Log.loglevel) <= Log.DEBUG then
+            (TextIO.output(out, "============== Control Flow =============\n");
+             Flow.Graph.printGraph printFlowGraphNode out control;
+             TextIO.output(out, "============== Liveness =============\n");
+             Liveness.show(out, igraph))
+        else ()
     end
 
 fun withOpenFile fname f =
@@ -55,27 +61,39 @@ fun withOpenFile fname f =
 
 fun compile filename =
     let val _ = Tr.frags := []
+        val out = TextIO.openOut (filename ^ ".s")
         val absyn = Parse.parse filename
-        (* (TextIO.output(out, "================ AST ===============\n"); *)
-        (*  PrintAbsyn.print(out, absyn); *)
+        val _ = if (!Log.loglevel) <= Log.DEBUG then
+                    (TextIO.output(out, "================ AST ===============\n");
+                     PrintAbsyn.print(out, absyn))
+                else ()
         val frags = (Temp.reset(); FindEscape.findEscape absyn; Semant.transProg absyn)
-        fun doCompile out =
-            let val instrs = foldl (compileproc out) [] frags
-            in
-                emit out instrs;
-                dataflow out instrs
-            end
+        val instrs = foldl (compileproc out) [] frags
     in
-        withOpenFile (filename ^ ".s")
-	             (fn out => doCompile out)
+        emit out instrs;
+        dataflow out instrs;
+        TextIO.closeOut out
     end
+
+fun main(args) =
+    if (length args) < 1 then
+        (Log.error "Usage: tc FILENAME.tig";
+         OS.Process.exit(OS.Process.failure))
+    else
+        let val _ = if (length args) = 2 then
+                        let
+                            val loglevel = valOf (Int.fromString (hd (tl args)))
+                        in
+                            Log.loglevel := loglevel
+                        end
+                    else ()
+        in
+            compile (hd args);
+            OS.Process.exit(OS.Process.success)
+        end
 
 end
 
-val args = CommandLine.arguments()
-val _ = if (length args) <> 1 then
-            (Log.error "Usage: tc FILENAME.tig";
-             OS.Process.exit(OS.Process.failure))
-        else
-            (Main.compile (hd args);
-             OS.Process.exit(OS.Process.success))
+val _ = if not (String.isSuffix "sml" (CommandLine.name()))
+        then Main.main(CommandLine.arguments())
+        else ()
