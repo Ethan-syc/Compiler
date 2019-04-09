@@ -40,10 +40,10 @@ fun dataflow out instrs =
                 nodeID ^ ": Def: " ^ def ^ ", Use: " ^ use
             end
     in
-        (* TextIO.output(out, "============== Control Flow =============\n"); *)
-        (* Flow.Graph.printGraph printFlowGraphNode out control; *)
-        (* TextIO.output(out, "============== Liveness =============\n"); *)
-        (* Liveness.show(out, igraph) *)
+        TextIO.output(out, "============== Control Flow =============\n");
+        Flow.Graph.printGraph printFlowGraphNode out control;
+        TextIO.output(out, "============== Liveness =============\n");
+        Liveness.show(out, igraph);
         ()
     end
 
@@ -72,10 +72,10 @@ fun compile filename =
 
 end
 
-val args = CommandLine.arguments()
+(* val args = CommandLine.arguments()
 val _ = if (length args) <> 1 then
             (Log.error "Usage: tc FILENAME.tig";
              OS.Process.exit(OS.Process.failure))
         else
             (Main.compile (hd args);
-             OS.Process.exit(OS.Process.success))
+             OS.Process.exit(OS.Process.success)) *)
