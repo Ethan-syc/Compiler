@@ -10,7 +10,7 @@ val WARNING = 4
 val ERROR = 5
 val NOLOG = 6
 (* todo: change this to disable logging *)
-val loglevel = NOLOG
+val loglevel = ERROR
 
 fun loglevelToName 1 = "DEBUG"
   | loglevelToName 2 = "VERBOSE"
@@ -24,7 +24,7 @@ fun log level msg =
         let val date = Date.fromTimeLocal(Time.now())
             val levelname = loglevelToName level
         in
-            print((Date.fmt (date, "%c")) ^ " " ^ levelname ^ ": " ^ msg ^ "\n")
+            print((Date.fmt "%c" date) ^ " " ^ levelname ^ ": " ^ msg ^ "\n")
         end
     else ()
 

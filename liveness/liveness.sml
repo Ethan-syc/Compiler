@@ -42,6 +42,8 @@ structure G = FuncGraph(Key)
 
 datatype igraph =
          IGRAPH of {graph: S.set G.graph,
+                    inGraph: DF.Result,
+                    outGraph: DF.Result,
                     moves: (Temp.temp * Temp.temp) list}
 
 fun interferenceGraph (Flow.FGRAPH {control=g}: Flow.flowgraph) =
@@ -56,7 +58,7 @@ fun interferenceGraph (Flow.FGRAPH {control=g}: Flow.flowgraph) =
         fun addInterference(node, graph) =
             let val {def, use, ismove} = FG.nodeInfo(node)
                 val outSet = FG.nodeInfo (FG.getNode (outGraph, FG.getNodeID node))
-                fun addEdge ((dst, src), graph) = G.addEdge(graph, {from=src, to=dst})
+                fun addEdge ((src, dst), graph) = G.addEdge(graph, {from=src, to=dst})
             in
                 if ismove
                 then
@@ -76,14 +78,20 @@ fun interferenceGraph (Flow.FGRAPH {control=g}: Flow.flowgraph) =
             end
         val igraph = foldl addInterference igraph (FG.nodes g)
     in
-        IGRAPH {graph=igraph, moves=(!moves)}
+        IGRAPH {graph=igraph, inGraph=inGraph, outGraph=outGraph, moves=(!moves)}
     end
 
-fun show(out, IGRAPH {graph, moves}) =
+fun show(out, IGRAPH {graph, inGraph, outGraph, moves}) =
     let fun printNode (nodeID, set) =
-            Int.toString nodeID ^ ": " ^ (Utils.join "," (map Int.toString (S.listItems set)))
+            Int.toString nodeID ^ ": {" ^ (Utils.join "," (map Int.toString (S.listItems set))) ^ "}"
+        fun printIONode (nodeID, set) =
+            nodeID ^ ": {" ^ (Utils.join "," (map Int.toString (S.listItems set))) ^ "}"
     in
         G.printGraph printNode out graph
+        (* TextIO.output(out, "============== In Graph ==============\n"); *)
+        (* FG.printGraph printIONode out inGraph; *)
+        (* TextIO.output(out, "============== Out Graph ==============\n"); *)
+        (* FG.printGraph printIONode out outGraph *)
     end
 
 end

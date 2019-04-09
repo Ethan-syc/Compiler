@@ -2,6 +2,7 @@
 *.lex.sml
 *.grm.*
 *.s
+tc
 
 # Emacs
 *~

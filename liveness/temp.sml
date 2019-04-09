@@ -8,7 +8,7 @@ struct
     structure Table = IntMapTable(type key = int
     			      fun getInt n = n)
     fun reset () =
-	let val () = temps := 100
+	let val () = temps := 128
 	    val () = labelCount := 0
 	in
 	    ()

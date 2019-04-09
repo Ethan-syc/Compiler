@@ -151,7 +151,7 @@ fun arg 0 = T.TEMP(A0)
 fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel s), args)
 fun procEntryExit1 (frame, body) = PROC {body=T.SEQ(T.LABEL(#label frame), T.EXP body), frame=frame}
-fun procEntryExit2 (frame, body) = body@[Assem.OPER {assem=fn (x) => "",
+fun procEntryExit2 (frame, body) = body@[Assem.OPER {assem=fn (x) => "<function exit>\n",
                                                      src=[ZERO, RA, SP]@calleesaves,
                                                      dst=[],
                                                      jump=SOME([])}]
