@@ -379,6 +379,8 @@ local
       structure MakeGraph = gs_45
       structure Liveness = gs_42
       structure Flow = gs_21
+      structure Printtree = gs_12
+      structure PrintAbsyn = gs_24
       main.sml
    in
       structure gs_49 = Main
