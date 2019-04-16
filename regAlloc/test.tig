@@ -1,0 +1,76 @@
+/*
+let
+  type list = {hd:int, rest:list}
+  var b:list := list {hd=0, rest=nil}
+  var a:list := list {hd=1, rest=b}
+in
+  a.rest.rest.rest := nil;
+  a.rest.hd + 2
+end
+
+let
+  type a=b
+  type c=int
+  type b=c
+  var varA:a := 3
+  var varB:b := varA
+  var varC:c := varB
+in
+  varA+varB+varC
+end
+
+
+let
+  type b = {item:a}
+  type a = {item:b}
+
+  var varA:a := a {item=nil}
+  var varB:b := b {item=varA}
+in
+  varA.item + 1
+end
+
+let
+type a = {one:b, two:c}
+type d = array of e
+type f = array of a
+type b = {one:string, two:d}
+type e = int
+type c = array of d
+var arrayd := d[10] of 3
+var arrayc := c[1] of arrayd
+var recordb := b {one="aa", two=arrayd}
+var recorda := a {one=recordb, two=arrayc}
+var arrayf := f[10] of recorda
+in
+arrayf[1].two[1][2] = 1;
+recorda.one.two[1] = 1;
+recorda.one.one = "a"
+end
+
+let
+  var x: int := 3
+  var y: int := 4
+  function f(x: int, b: int): int = x + b
+  function g(x: int): int =
+    if x = 1
+    then 1
+    else (if x = 2 then 1 else g(x - 1) + g(x - 2))
+in
+  f(x + y, 2);
+  g(10)
+end
+
+let
+  var x: int := 2
+  var z: int := 3
+in
+  if x > 1 then z := 1
+end
+*/
+
+let
+  function f(x: int): int = x + 1
+in
+  f(1)
+end
