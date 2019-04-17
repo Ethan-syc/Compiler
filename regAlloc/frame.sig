@@ -13,6 +13,7 @@ sig
   val FP : Temp.temp
   val SP: Temp.temp
   val RV : Temp.temp
+  val V1 : Temp.temp
   val newFrame : {name: Temp.label,
                   formals: bool list} -> frame
   val name : frame -> Temp.label
@@ -29,7 +30,7 @@ sig
   val printFrag: TextIO.outstream * frag -> unit
   val tempMap: string Temp.Table.table
   val string: Temp.label * string -> string
-  val regToString: Temp.temp -> string
+  val regToString: string Temp.Table.table-> Temp.Table.key -> string
   val getSpecialReg: string -> Temp.temp
   val getSpecialRegs: string -> Temp.temp list
   val arg: int -> Tree.exp

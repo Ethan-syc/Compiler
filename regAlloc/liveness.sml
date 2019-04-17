@@ -3,7 +3,7 @@ sig
   type igraph
   type actualGraph
   val interferenceGraph: Flow.flowgraph -> igraph
-  val getInfoFromIgraph: igraph -> actualGraph
+  val getInterference: igraph -> actualGraph
   val show: TextIO.outstream * igraph -> unit
 end
 
@@ -46,7 +46,7 @@ datatype igraph =
                     moves: (Temp.temp * Temp.temp) list}
 type actualGraph = S.set G.graph
 
-fun getInfoFromIgraph (IGRAPH {graph, inGraph, outGraph, moves}) = graph
+fun getInterference (IGRAPH {graph, inGraph, outGraph, moves}) = graph
 
 fun interferenceGraph (Flow.FGRAPH {control=g}: Flow.flowgraph) =
     let val (inGraph, outGraph) = DF.compute(g)

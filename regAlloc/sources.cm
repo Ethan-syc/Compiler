@@ -40,6 +40,7 @@ makegraph.sml
 liveness.sml
 dataflow.sml
 key.sml
+regAlloc.sml
 $/basis.cm
 $/smlnj-lib.cm
 $/ml-yacc-lib.cm

@@ -4,6 +4,7 @@ structure Tr = Translate
 structure F = MipsFrame
 (* structure R = RegAlloc *)
 
+
 fun compileproc out (F.PROC{body,frame}, instrs) =
     let val frameName = Symbol.name (F.name frame)
         val _ = print ("compiling " ^ frameName ^ "\n")
@@ -21,7 +22,7 @@ fun compileproc out (F.PROC{body,frame}, instrs) =
 
 fun emit out instrs =
     let (* todo: call procEntryExit3 *)
-        val format0 = FormatAssem.format(Temp.makestring)
+        val format0 = FormatAssem.format(MipsFrame.regToString(MipsFrame.tempMap))
         fun printInstr (instr, i) =
             (TextIO.output(out, Int.toString i ^ ": " ^ format0 instr); i + 1)
     in
@@ -35,6 +36,7 @@ fun emit out instrs =
 fun dataflow out instrs =
     let val (flowgraph, nodes) = MakeGraph.instrs2graph instrs
         val igraph = Liveness.interferenceGraph flowgraph
+        val interference = Liveness.getInterference(igraph)
         val Flow.FGRAPH {control=control} = flowgraph
         fun printFlowGraphNode (nodeID, info) =
             let val {def, use, ismove} = info
@@ -48,8 +50,8 @@ fun dataflow out instrs =
             (TextIO.output(out, "============== Control Flow =============\n");
              Flow.Graph.printGraph printFlowGraphNode out control;
              TextIO.output(out, "============== Liveness =============\n");
-             Liveness.show(out, igraph))
-        else ()
+             Liveness.show(out, igraph); interference)
+        else interference
     end
 
 fun withOpenFile fname f =
@@ -68,9 +70,19 @@ fun compile filename =
                 else ()
         val frags = (Temp.reset(); FindEscape.findEscape absyn; Semant.transProg absyn)
         val instrs = foldl (compileproc out) [] frags
+        val _ = emit out instrs
+        val interference = dataflow out instrs;
+        val allocation = RegAlloc.alloc (interference)
+        val _ = if (!Log.loglevel) <= Log.DEBUG then
+          RegAlloc.showAllocations(allocation, interference, out)
+          else [()]
+        val format0 = FormatAssem.format(MipsFrame.regToString(allocation))
+        fun printInstr (instr, i) =
+            (TextIO.output(out, Int.toString i ^ ": " ^ format0 instr); i + 1)
+        val _ = (TextIO.output(out, "============== Real Assembly =============\n");
+           foldl printInstr 0 instrs)
+
     in
-        emit out instrs;
-        dataflow out instrs;
         TextIO.closeOut out
     end
 

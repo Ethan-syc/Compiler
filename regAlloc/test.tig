@@ -62,15 +62,15 @@ in
 end
 
 let
-  var x: int := 2
-  var z: int := 3
-in
-  if x > 1 then z := 1
-end
-*/
-
-let
   function f(x: int): int = x + 1
 in
   f(1)
+end
+*/
+let
+  var x: int := 2
+  var z: int := 3
+  val y: int := 100
+in
+  if y-x > z then z+x else z+y
 end

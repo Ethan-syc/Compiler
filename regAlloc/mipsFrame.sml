@@ -138,7 +138,9 @@ fun allocLocal {label, formals, offset, numLocals} escape =
                         ^ S.name label);
             InFrame(!offset)
         end
-
+fun regToString table reg =
+    case Temp.Table.look(table, reg) of SOME(s) => s
+                                 | _ => Temp.makestring reg
 fun exp access treeExp =
     case access of InReg(temp) => T.TEMP(temp)
                  | InFrame(offset) => T.MEM(T.BINOP(T.PLUS, treeExp, T.CONST(offset)))
@@ -185,9 +187,6 @@ fun allocString (label, literal) =
 fun printFrag (stream, PROC {body=body, frame=_}) =
     Printtree.printtree(stream, body)
   | printFrag (stream, STRING (_, s)) = print("STRING FRAG: " ^ s ^ "\n")
-fun regToString reg =
-    case Tab.look(tempMap, reg) of SOME(s) => s
-                                 | _ => Temp.makestring reg
 fun getSpecialReg name =
     if Utils.toLower(name) = "fp" then FP
     else if Utils.toLower(name) = "sp" then SP
