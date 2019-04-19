@@ -21,6 +21,7 @@ sig
   val formals : frame -> access list
   val numLocals: frame -> int
   val allocLocal : frame -> bool -> access
+  val allocInFrame: frame -> int
   val exp : access -> Tree.exp -> Tree.exp
   val externalCall: string * Tree.exp list -> Tree.exp
   val procEntryExit1: frame * Tree.exp -> frag

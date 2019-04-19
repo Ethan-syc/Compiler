@@ -9,6 +9,7 @@ type register = string
 structure T = Tree
 structure S = Symbol
 structure Tab = Temp.Table
+exception Impossible
 
 val _ = Temp.resetzero()
 (* Stack pointer *)
@@ -138,6 +139,10 @@ fun allocLocal {label, formals, offset, numLocals} escape =
                         ^ S.name label);
             InFrame(!offset)
         end
+
+fun allocInFrame frame =
+    case allocLocal frame true of InFrame(offset) => offset
+                                | _ => raise Impossible
 fun regToString table reg =
     case Temp.Table.look(table, reg) of SOME(s) => s
                                  | _ => Temp.makestring reg

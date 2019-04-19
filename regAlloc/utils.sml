@@ -4,8 +4,18 @@ struct
 structure T = Tree
 (* A specialization of List.exists for bool lists *)
 fun anyOf l = List.exists (fn(x) => x) l
+fun allOf l = not(List.exists (fn(x) => not x) l)
 
-fun inList (l, e: string) = List.exists (fn(x) => (x = e)) l
+fun min f l =
+    let val vals = map f l
+        fun helper (fx, x, (currfx, currx)) =
+            if fx < currfx then (fx, x) else (currfx, currx)
+        val min = ListPair.foldl helper (hd vals, hd l) (vals, l)
+    in
+        #2 min
+    end
+
+fun inList (l, e) = List.exists (fn(x) => (x = e)) l
 
 fun arrayMul (value, 0) = []
   | arrayMul (value, numRepeats) = value::arrayMul (value, numRepeats - 1)

@@ -2,14 +2,15 @@ signature REG_ALLOC =
 sig
   structure Frame : FRAME
   type allocation = Frame.register Temp.Table.table
-  val alloc :  KeySet.set KeyGraph.graph -> allocation (* frame ? *)
-  val showAllocations : allocation * KeySet.set KeyGraph.graph * TextIO.outstream -> unit list
+  val alloc :  KeySet.set KeyGraph.graph * Frame.frame -> allocation
+  val showAllocations : allocation * Temp.temp list * TextIO.outstream -> unit list
 end
 
 structure RegAlloc : REG_ALLOC =
 struct
   structure Frame = MipsFrame
   structure G = KeyGraph
+  structure T = Temp.Table
   type allocation = Frame.register Temp.Table.table
   val initial = Frame.tempMap
   val callersaves = Frame.getSpecialRegs("callersaves")
@@ -19,26 +20,25 @@ struct
   val V1 = Frame.getSpecialReg("v1")
   val registers = callersaves @ calleesaves @ argregs @ [RV] @ [V1]
   val registerStrings = map (MipsFrame.regToString initial) registers
-  fun dummySpillCost (temp) = 1
-  fun alloc (interference) =
+  fun dummySpillCost (temp) =
+      (* If precolored, return Int.maxInt *)
+      if isSome(T.look(initial, temp)) then 1073741823 else 1
+  fun alloc (interference, frame) =
     let
       val (allocation, spillList) = Color.color {interference=interference, initial=initial, spillCost=dummySpillCost, registers=registerStrings}
     in
       allocation
     end
 
-  fun showAllocations (allocation, interference, out) =
+  fun showAllocations (allocation, temps, out) =
     let
-      fun showAllocation (temp) =
-        let
-          val color = case Temp.Table.look(allocation, temp) of SOME(color) => color
-                                                        | NONE => (Log.error("fail to find color for this temp"); "no color")
-        in
-          (TextIO.output(out, "register " ^ Int.toString (temp) ^ " uses " ^ color ^ "\n"))
-        end
-      val _ = TextIO.output(out, "================ RegAlloc ===============\n")
-      val temps = map G.getNodeID (G.nodes(interference))
+        fun showAllocation (temp) =
+            case T.look(allocation, temp)
+             of SOME(color) =>
+                TextIO.output(out, "register " ^ Int.toString (temp) ^ " uses " ^ color ^ "\n")
+              | _ => Log.error ("Register " ^ Int.toString temp ^ " not found!")
+        val _ = TextIO.output(out, "================ RegAlloc ===============\n")
     in
-      map showAllocation temps
+        map showAllocation temps
     end
 end

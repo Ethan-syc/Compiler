@@ -60,7 +60,13 @@ in
   f(x + y, 2);
   g(10)
 end
-
+let
+  var x: int := 2
+  var z: int := 3
+  val y: int := 100
+in
+  if y-x > z then z+x else z+y
+end
 let
   function f(x: int): int = x + 1
 in
@@ -68,9 +74,8 @@ in
 end
 */
 let
-  var x: int := 2
-  var z: int := 3
-  val y: int := 100
+  function fact(x: int): int =
+    if x = 0 then 1 else fact(x - 1) * x
 in
-  if y-x > z then z+x else z+y
+  fact(3)
 end
