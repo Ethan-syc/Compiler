@@ -118,7 +118,7 @@ fun newFrame {name: Temp.label, formals} =
         val formals' = buildFormals (0, formals)
         val moves = genMoves(0, formals')
     in
-        (* Offset starts at 4 because old FP *)
+        (* Offset starts at -8 because old FP is saved at -4($sp) *)
         {label=name, formals=formals', offset=ref ~4, numLocals=ref 1, moves=Utils.seq moves}
     end
 
@@ -164,8 +164,7 @@ fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel s), args)
 fun procEntryExit1 (frame, body) =
     let val moves = #moves frame
-        val body = Utils.seq [moves,
-                              T.MOVE(T.TEMP RV, body)]
+        val body = Utils.seq [moves, T.MOVE(T.TEMP RV, body)]
     in
         PROC {body=body, frame=frame}
     end
@@ -245,9 +244,16 @@ fun procEntryExit2 (frame: frame, body) =
 (*         PROC {body=Utils.seq insns, frame={label=label, formals=formals, offset=offset, numLocals=numLocals}} *)
 (*     end *)
 fun procEntryExit3 ({label=name, offset=offset, ...}: frame, body: Assem.instr list) =
-    {prolog="# PROCEDURE " ^ S.name name ^ "\n" ^ S.name name ^ "\naddi $sp, $sp, " ^ Utils.i2s (!offset) ^ "\n",
+    {prolog="# PROCEDURE " ^ S.name name ^ "\n"
+            ^ S.name name ^ ":\n"
+            ^ "sw $fp, -4($sp)\n"
+            ^ "addi $fp, $sp, 0\n"
+            ^ "addi $sp, $sp, " ^ Utils.i2s (!offset) ^ "\n",
      body=body,
-     epilog="addi $sp, $sp, " ^ Utils.i2s (!offset) ^ "\njr $ra\n# END " ^ S.name name ^ "\n"}
+     epilog="addi $sp, $sp, " ^ Utils.i2s (~(!offset)) ^ "\n"
+            ^ "lw $fp, -4($sp)\n"
+            ^ "jr $ra\n"
+            ^ "# END " ^ S.name name ^ "\n"}
 fun allocString (label, literal) =
     STRING (label, literal)
 fun printFrag (stream, PROC {body=body, frame=_}) =

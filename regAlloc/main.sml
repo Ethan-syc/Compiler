@@ -82,7 +82,8 @@ fun compileproc out (F.PROC{body,frame}, prevInstrs) =
     let val frameName = Symbol.name (F.name frame)
         val _ = print ("compiling " ^ frameName ^ "\n")
         val stms = tl ((Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body)
-        val _ = if (!Log.loglevel) <= Log.DEBUG then
+        val stms = List.take(stms, length stms - 2)
+            val _ = if (!Log.loglevel) <= Log.DEBUG then
                     (TextIO.output(out, "============== Tree (" ^ frameName ^ ") ==============\n");
                      app (fn s => Printtree.printtree(out,s)) stms)
                 else ()

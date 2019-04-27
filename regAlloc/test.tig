@@ -73,7 +73,6 @@ let
 in
   fact(3)
 end
-*/
 let
   function y(a: int, b: int, c: int, d: int, e: int): int = 5
   function x(a: int): int =
@@ -97,3 +96,5 @@ in
   x(3);
   print(s)
 end
+*/
+print("hello world!\n")
