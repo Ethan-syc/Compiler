@@ -17,7 +17,7 @@ struct
 
   val base_venv =
     let
-      val baseFunList = [(Symbol.symbol "print", FunEntry {level=Translate.outermost, label=Temp.namedlabel("tig_printz"), formals=[Types.STRING], result=Types.UNIT}),
+      val baseFunList = [(Symbol.symbol "print", FunEntry {level=Translate.outermost, label=Temp.namedlabel("tig_print"), formals=[Types.STRING], result=Types.UNIT}),
                            (Symbol.symbol "flush", FunEntry {level=Translate.outermost, label=Temp.namedlabel("tig_flush"), formals=[], result=Types.UNIT}),
                            (Symbol.symbol "getchar", FunEntry {level=Translate.outermost, label=Temp.namedlabel("tig_getchar"), formals=[], result=Types.STRING}),
                            (Symbol.symbol "ord", FunEntry {level=Translate.outermost, label=Temp.namedlabel("tig_ord"), formals=[Types.STRING], result=Types.INT}),

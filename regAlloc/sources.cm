@@ -41,6 +41,7 @@ liveness.sml
 dataflow.sml
 key.sml
 regAlloc.sml
+test.sml
 $/basis.cm
 $/smlnj-lib.cm
 $/ml-yacc-lib.cm

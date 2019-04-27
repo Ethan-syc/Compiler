@@ -76,10 +76,10 @@ fun checkRecord (offset, symbol, pos, l) =
    ty1 is the expected type, ty2 is the actual type, return bool *)
 fun doCheckSameType (ty1, ty2, pos) =
     let
-        val ty1 = case ty1 of TY.PENDING(func) => func()
-                            | ty => ty
-        val ty2 = case ty2 of TY.PENDING(func) => func()
-                            | ty => ty
+        (* val ty1 = case ty1 of TY.PENDING(func) => func() *)
+        (*                     | ty => ty *)
+        (* val ty2 = case ty2 of TY.PENDING(func) => func() *)
+        (*                     | ty => ty *)
     in
         case ty1 of TY.RECORD(_, ty1Unique) =>
                     (case ty2 of TY.RECORD(_, ty2Unique) =>
@@ -263,12 +263,17 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                        {exp=TR.transConst 0, ty=TY.BOTTOM}))
           | trexp (A.RecordExp {fields, typ, pos}) =
             let
-                val recordTy = S.look(tenv, typ)
-                val recordTy = case recordTy of SOME(ty) => resolvePending ty
-                                              | _ => (err(pos, S.name typ ^ " is not defined."); TY.BOTTOM)
-                val (symbols, unique) = case recordTy of TY.RECORD(symbols, unique) => (symbols, unique)
-                                                       | _ => (err(pos, S.name typ ^ " is not a RECORD.");
-                                                               ([], ref ()))
+                val recordTy = case S.look(tenv, typ) of SOME(ty) => ty
+                                                       | NONE => (err(pos, S.name typ ^ " is not defined.");
+                                                                  TY.BOTTOM)
+                val recordTy = resolvePending recordTy
+                val (symbols, unique) = case recordTy
+                                         of TY.RECORD(symbols, unique) => (symbols, unique)
+                                          | _ => (err(pos, S.name typ
+                                                           ^ " is "
+                                                           ^ TY.typeToString recordTy
+                                                           ^ "; expected RECORD");
+                                                  ([], ref ()))
                 val fieldsLength = length fields
             in
                 if fieldsLength = 0
@@ -360,15 +365,15 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
         and trvar (A.SimpleVar(symbol, pos)) =
             (* Level is when variable is used.  *)
             let
-                val _ = Log.debug("SimpleVar: " ^ S.name symbol)
+                val _ = Log.debug("SimpleVar: " ^ S.name symbol ^ " is...")
             in
                 case S.look(venv, symbol)
                  of SOME(E.VarEntry {access, ty, loopVar}) =>
                     let
                         val exp = TR.simpleVar(access, level)
+                        val ty = resolvePending ty
                     in
-                        (case ty of TY.PENDING(func) => {exp=exp, ty=func()}
-                                  | _ => {exp=exp, ty=ty})
+                        {exp=exp, ty=ty}
                     end
                   | _ => errAndBottom(pos, TR.transConst 0, S.name symbol ^ " not declared or not a variable")
             end
@@ -475,28 +480,25 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                                 (* If a variable type is specified, first check the type of the init exp.
                                    If init exp returns NIL, then check if symbol represents a RECORD.
                                    Otherwise, check if symbol names the type returned by init exp *)
-                                let
-                                    val symbolTy = S.look(tenv, symbol)
-                                in
-                                    case symbolTy
-                                     of SOME(symbolType) =>
-                                        let
-                                            val _ = Log.debug(S.name symbol ^ " is " ^ TY.typeToString symbolType)
-                                            val _ = doCheckSameType(symbolType, initType, pos)
-                                        in
-                                            {tenv=tenv,
-                                             venv=S.enter(venv, name, E.VarEntry{
-                                                              access=access,
-                                                              ty=symbolType,
-                                                              loopVar=false})}
-                                        end
-                                      | NONE =>
-                                        (err(pos, "Type " ^ S.name symbol ^ " is not found");
-                                         {tenv=tenv,
-                                          venv=S.enter(venv, name, E.VarEntry{access=access,
-                                                                              ty=TY.BOTTOM,
-                                                                              loopVar=false})})
-                                end
+                                case S.look(tenv, symbol)
+                                 of SOME(symbolType) =>
+                                    let
+                                        (* val _ = Log.debug(S.name symbol ^ " is " ^ TY.typeToString symbolType) *)
+                                        val symbolType = resolvePending symbolType
+                                        val _ = doCheckSameType(symbolType, initType, pos)
+                                    in
+                                        {tenv=tenv,
+                                         venv=S.enter(venv, name, E.VarEntry{
+                                                          access=access,
+                                                          ty=symbolType,
+                                                          loopVar=false})}
+                                    end
+                                  | NONE =>
+                                    (err(pos, "Type " ^ S.name symbol ^ " is not found");
+                                     {tenv=tenv,
+                                      venv=S.enter(venv, name, E.VarEntry{access=access,
+                                                                          ty=TY.BOTTOM,
+                                                                          loopVar=false})})
 
                 end
               | A.FunctionDec (decs) =>
@@ -655,7 +657,7 @@ and transTy(venv, tenv, decs) =
                         else Set.add(existingNames, name)
                     val _ = foldl checkFieldName Set.empty fields
                 in
-                   TY.PENDING(genRecord)
+                    TY.PENDING(genRecord)
                 end
         fun makeTypeMap ({name, ty, pos}, m) =
             case ty
@@ -678,12 +680,11 @@ and transTy(venv, tenv, decs) =
             in
                 (helper(name, []); false)
             end
-            handle Cycle => true
         fun checkTypeDec (dec, {venv, tenv}) =
             {venv=venv, tenv=S.enter(tenv, #name dec, processTypeDec(dec))}
         val result = foldl checkTypeDec {venv=venv, tenv=tenv} decs
         val typeMap = foldl makeTypeMap S.empty decs
-        val cycleDetected = foldl (fn (tf, result) => result orelse tf) false (map (checkTypeCycle typeMap) decs)
+        val cycleDetected = Utils.anyOf (map (checkTypeCycle typeMap) decs) handle Cycle => true
         (* check every dec onece after we add all the pending ty into the new tenv to make sure they can resolve correctly *)
 
     in

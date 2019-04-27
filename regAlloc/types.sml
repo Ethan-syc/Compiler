@@ -18,7 +18,9 @@ fun join [] = ""
   | join (s::[]) = s
   | join (s::rest) = s ^ "," ^ join(rest)
 
-fun fieldToString (symbol, ty) = Symbol.name symbol ^ ": " ^ typeToString ty
+fun fieldToString (symbol, ty) =
+    case ty of PENDING(_) => Symbol.name symbol ^ ": " ^ "<RECORD>"
+             | _ => Symbol.name symbol ^ ": " ^ typeToString ty
 and typeToString (RECORD(fields, _)) = "RECORD {" ^ (join (map fieldToString fields)) ^ "}"
   | typeToString (NIL) = "NIL"
   | typeToString (INT) = "INT"
@@ -26,5 +28,5 @@ and typeToString (RECORD(fields, _)) = "RECORD {" ^ (join (map fieldToString fie
   | typeToString (BOTTOM) = "<ERROR: UNKNOWN>"
   | typeToString (ARRAY(arrType, _)) = "ARRAY of " ^ typeToString(arrType)
   | typeToString (UNIT) = "<NO VALUE>"
-  | typeToString (PENDING func) = "PENDING: " ^ typeToString(func())
+  | typeToString (PENDING func) = "PENDING: "
 end

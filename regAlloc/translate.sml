@@ -147,14 +147,14 @@ fun transFor (loopVar, starte, ende, body, breakLabel) =
         val body' = unNx body
     in
         Nx(Utils.seq[T.MOVE (r, start'),
-               T.MOVE (T.TEMP rend, end'),
-               T.CJUMP (T.LE, r, T.TEMP rend, l1, breakLabel),
-               T.LABEL l3,
-               T.EXP (T.BINOP (T.PLUS, r, T.CONST 1)),
-               T.LABEL l1,
-               body',
-               T.CJUMP (T.LT, r, T.TEMP rend, l3, breakLabel),
-               T.LABEL breakLabel])
+                     T.MOVE (T.TEMP rend, end'),
+                     T.CJUMP (T.LE, r, T.TEMP rend, l1, breakLabel),
+                     T.LABEL l3,
+                     T.MOVE (r, T.BINOP (T.PLUS, r, T.CONST 1)),
+                     T.LABEL l1,
+                     body',
+                     T.CJUMP (T.LT, r, T.TEMP rend, l3, breakLabel),
+                     T.LABEL breakLabel])
     end
 
 fun transBreak breakLabel = Nx (T.JUMP (T.NAME breakLabel, [breakLabel]))
@@ -249,7 +249,7 @@ fun transRecord (decFields, actualFields) =
                     else foldl genMove [] actualFields
         val moves = rev(moves)
     in
-        Ex(T.ESEQ(Utils.seq([T.MOVE(T.TEMP addr, F.externalCall("malloc", [T.CONST(4 * len)]))] @ moves),
+        Ex(T.ESEQ(Utils.seq([T.MOVE(T.TEMP addr, F.externalCall("tig_allocRecord", [T.CONST(4 * len)]))] @ moves),
                   T.TEMP addr))
     end
 
@@ -260,10 +260,9 @@ fun transArray (initExp, len) =
         val actualAddr = Temp.newtemp()
         val actualLen = unEx (transBinOp(len, Ex (T.CONST 1), A.PlusOp))
     in
-        Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP addr, F.externalCall("malloc", [actualLen])),
-                            T.MOVE(T.TEMP actualAddr, T.BINOP(T.PLUS, T.TEMP addr, T.CONST(4))),
-                            T.MOVE(T.MEM(T.TEMP addr), len'),
-                            T.EXP(F.externalCall("initArray", [T.TEMP actualAddr, initExp, len']))],
+        Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP addr, F.externalCall("tig_initArray", [actualLen, initExp])),
+                            T.MOVE(T.MEM (T.TEMP addr), len'),
+                            T.MOVE(T.TEMP actualAddr, T.BINOP(T.PLUS, T.TEMP addr, T.CONST 4))],
                   T.TEMP actualAddr))
     end
 
@@ -292,7 +291,7 @@ fun transSubscriptVar (arrayExp, offset) =
         val lnext = Temp.newlabel()
     in
         (* error if offset >= size | offset < 0 *)
-        Ex(T.ESEQ(T.EXP(F.externalCall("boundsCheck",
+        Ex(T.ESEQ(T.EXP(F.externalCall("tig_boundsCheck",
                                        [T.MEM(T.BINOP(T.PLUS, addr, T.CONST ~4)),
                                         offset])),
                   T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4)))))
@@ -304,7 +303,7 @@ fun transFieldVar (recordExp, offset) =
         val offset = unEx offset
         val ansAddr = Temp.newtemp()
     in
-        Ex(T.ESEQ(T.EXP(F.externalCall("checkNil", [addr])),
+        Ex(T.ESEQ(T.EXP(F.externalCall("tig_checkNil", [addr])),
                   T.MEM(T.BINOP(T.PLUS, addr, T.BINOP(T.MUL, offset, T.CONST 4)))))
     end
 
@@ -318,7 +317,7 @@ fun transStringCompare (s1, s2) =
     in
         Ex(T.ESEQ(Utils.seq[T.MOVE(T.TEMP t1, T.CALL(s1, [])),
                             T.MOVE(T.TEMP t2, T.CALL(s2, [])),
-                            T.MOVE(T.TEMP result, F.externalCall("stringCompare", [T.TEMP t1, T.TEMP t2]))],
+                            T.MOVE(T.TEMP result, F.externalCall("tig_stringCompare", [T.TEMP t1, T.TEMP t2]))],
                   T.TEMP result))
     end
 

@@ -102,7 +102,7 @@ fun genB (name, src, lab) format =
     then
         let val rs = format(hd src)
         in
-            name ^ " $" ^ rs ^ ", " ^ genLabel lab
+            name ^ " $" ^ rs ^ ", " ^ Symbol.name lab ^ "\n"
         end
     else if Utils.inList(["beq", "bne"], name)
     then
@@ -110,12 +110,12 @@ fun genB (name, src, lab) format =
             val rs = format(hd src)
             val rt = format(hd (tl src))
         in
-            name ^ " $" ^ rs ^ ", $" ^ rt ^ ", " ^ genLabel lab
+            name ^ " $" ^ rs ^ ", $" ^ rt ^ ", " ^ Symbol.name lab ^ "\n"
         end
     else (Log.error("Compiler error: unknown branch instruction: " ^ name);
           "<ERROR>")
 and genMove (temp1, temp2) format =
     (* Moves temp2 into temp1 *)
     "add $" ^ format temp1 ^ ", $" ^ format temp2 ^ ", $" ^ format ZERO ^ "\n"
-and genLabel l = Symbol.name l ^ "\n"
+and genLabel l = Symbol.name l ^ ":\n"
 end

@@ -82,7 +82,7 @@ fun compileproc out (F.PROC{body,frame}, prevInstrs) =
     let val frameName = Symbol.name (F.name frame)
         val _ = print ("compiling " ^ frameName ^ "\n")
         val stms = tl ((Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body)
-        val stms = List.take(stms, length stms - 2)
+        (* val stms = List.take(stms, length stms - 2) *)
             val _ = if (!Log.loglevel) <= Log.DEBUG then
                     (TextIO.output(out, "============== Tree (" ^ frameName ^ ") ==============\n");
                      app (fn s => Printtree.printtree(out,s)) stms)
@@ -110,7 +110,9 @@ fun compileproc out (F.PROC{body,frame}, prevInstrs) =
         prevInstrs@instrs
     end
   | compileproc out (F.STRING(lab,s), instrs) =
-    (strings := (!strings)@[S.name lab ^ ": .asciiz \"" ^ s ^ "\""];
+    (strings := (!strings)@[S.name lab ^ ":\n"
+                            ^ ".word " ^ Int.toString (String.size s) ^ "\n"
+                            ^ ".asciiz \"" ^ String.toString s ^ "\"\n"];
      instrs)
 
 fun withOpenFile fname f =
@@ -123,7 +125,8 @@ fun compile filename =
     let val _ = Tr.frags := []
         val _ = strings := []
         val _ = Log.loglevel := Log.ERROR
-        val out = TextIO.openOut (filename ^ ".s")
+        val _ = Log.debug("Compiling " ^ filename)
+        val out = TextIO.openOut ("out/" ^ OS.Path.file filename ^ ".s")
         val absyn = Parse.parse filename
         val _ = if (!Log.loglevel) <= Log.DEBUG then
                     (TextIO.output(out, "================ AST ===============\n");
@@ -134,6 +137,12 @@ fun compile filename =
         val instrs = foldl (compileproc out) [] frags
         val _ = TextIO.output(out, ".data\n")
         val _ = map (fn s => TextIO.output(out, s)) (!strings)
+        val runtime = TextIO.inputAll (TextIO.openIn "runtimele.s")
+        val sysspim = TextIO.inputAll (TextIO.openIn "sysspim.s")
+        val _ = TextIO.output(out, "################# RUNTIME ################\n");
+        val _ = TextIO.output(out, runtime)
+        val _ = TextIO.output(out, "################# SYSTEM ###############\n");
+        val _ = TextIO.output(out, sysspim)
     in
         TextIO.closeOut out
     end
