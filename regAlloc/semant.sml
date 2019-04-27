@@ -500,36 +500,35 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
 
                 end
               | A.FunctionDec (decs) =>
-                let
-                    fun transParam ({name=name, params=params, ...}: A.fundec, paramTable) =
-                        (* Turns a A.field into a E.VarEntry *)
-                        let fun helper ({name, escape, typ, pos}: A.field) =
-                                let val access = TR.allocLocal level (!escape)
-                                in
-                                    case S.look(tenv, typ)
-                                     of SOME t =>
-                                        E.VarEntry{
-                                            access=access,
-                                            ty=t,
-                                            loopVar=false}
-                                      | NONE =>
-                                        (err(pos, "Type "
-                                                  ^ S.name typ
-                                                  ^ " is not found");
-                                         E.VarEntry{
-                                             access=access,
-                                             ty=TY.BOTTOM,
-                                             loopVar=false})
-                                end
-                            val entries = map helper params
+                let fun checkFunctionNames (funcDec: A.fundec, existingNames) =
+                        let
+                            val name = #name funcDec
+                            val pos = #pos funcDec
                         in
-                            S.enter(paramTable, name, entries)
+                            if Set.member(existingNames, name)
+                            then (err(pos, "Function with name "
+                                           ^ S.name name
+                                           ^ " already exists in this mutually recursive function group");
+                                  existingNames)
+                            else Set.add(existingNames, name)
                         end
-                    val paramTable = foldl transParam S.empty decs
                     fun checkFunctionHeader ({name, params, body, pos, result}, venv) =
                         let
-                            val params = valOf(S.look(paramTable, name))
-                            val paramTypes = map (fn (E.VarEntry {ty=ty, ...}) => ty) params
+                            fun checkParamType {name, escape, typ, pos} =
+                                case S.look(tenv, typ) of SOME(t) => t
+                                                        | NONE => (err(pos, "Type "
+                                                                            ^ S.name typ
+                                                                            ^ " is not found");
+                                                                   TY.BOTTOM)
+                            val label = Temp.newlabel()
+                            val formals = map op! (map #escape params)
+                            val newLevel = TR.newLevel {parent=level, name=label, formals=formals}
+                            val _ = Log.info("Function "
+                                             ^ S.name name
+                                             ^ "(" ^ S.name name ^ ")"
+                                             ^ " creates level "
+                                             ^ Int.toString (TR.depth newLevel))
+                            val paramTypes = map checkParamType params
                             (* If a return type is specified, it must exist. Otherwise, it's a procedure
                                returning TY.UNIT *)
                             val result_ty = case result
@@ -541,40 +540,34 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                                                                        ^ " is not found");
                                                               TY.BOTTOM))
                                               | NONE => TY.UNIT
-                            val label = Temp.newlabel()
                         in
                             (* We need to enter the function into the original venv, *)
                             (* not the one with its params, i.e. venv' *)
                             S.enter(venv,
                                     name,
                                     E.FunEntry{
-                                        level=level,
+                                        level=newLevel,
                                         label=label,
                                         formals=paramTypes,
                                         result=result_ty})
                         end
+                    val _ = foldl checkFunctionNames Set.empty decs
+                    val venv' = foldl checkFunctionHeader venv decs
                     fun checkFunctionDec ({name, params, body: A.exp, pos, result}, {venv: venvType, tenv: tenvType}) =
                         let
                             (* We are guaranteed to have this symbol in venv because checkFunctionHeader
                                will have been run *)
-                            val entry = case valOf (S.look(venv, name))
-                                         of E.FunEntry entry => entry
-                                          | _ => (Log.error("Compiler error: "
-                                                            ^ S.name name
-                                                            ^ " is not a FunEntry in venv");
-                                                  errorFunEntry)
-                            val resultType = #result entry
-                            val varEntries = valOf(S.look(paramTable, name))
-                            fun enterParam ({name=name, ...}: A.field, entry, venv) =
-                                S.enter(venv, name, entry)
-                            val venv' = ListPair.foldl enterParam venv (params, varEntries)
-                            val formals = map op! (map #escape params)
-                            val newLevel = TR.newLevel {parent=level, name=(#label entry), formals=formals}
-                            val _ = Log.info("Function "
-                                             ^ S.name name
-                                             ^ "(" ^ S.name (#label entry) ^ ")"
-                                             ^ " creates level "
-                                             ^ Int.toString (TR.depth newLevel))
+                            val {level=newLevel, label=_, formals=paramTypes, result=resultType} =
+                                case valOf (S.look(venv, name))
+                                 of E.FunEntry entry => entry
+                                  | _ => (Log.error("Compiler error: "
+                                                    ^ S.name name
+                                                    ^ " is not a FunEntry in venv");
+                                          errorFunEntry)
+                            val accesses = TR.formals newLevel
+                            fun enterParam ({name=name, ...}: A.field, (typ, access), venv) =
+                                S.enter(venv, name, E.VarEntry {access=access, ty=typ, loopVar=false})
+                            val venv' = ListPair.foldl enterParam venv (params, ListPair.zipEq (paramTypes, accesses))
                             val {exp=body, ty=actualReturn} = transExp(venv', tenv, body, newLevel, break)
                             val _ = TR.procEntryExit(newLevel, body)
                             val _ = if not (doCheckSameType(resultType, actualReturn, pos))
@@ -595,20 +588,7 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                         in
                             {venv=venv, tenv=tenv}
                         end
-                    fun checkFunctionNames (funcDec: A.fundec, existingNames) =
-                        let
-                            val name = #name funcDec
-                            val pos = #pos funcDec
-                        in
-                            if Set.member(existingNames, name)
-                            then (err(pos, "Function with name "
-                                           ^ S.name name
-                                           ^ " already exists in this mutually recursive function group");
-                                  existingNames)
-                            else Set.add(existingNames, name)
-                        end
-                    val _ = foldl checkFunctionNames Set.empty decs
-                    val venv' = foldl checkFunctionHeader venv decs
+
                 in
                     foldl checkFunctionDec {venv=venv', tenv=tenv} decs
                 end

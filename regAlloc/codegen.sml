@@ -8,6 +8,7 @@ structure MA = MipsAssem
 
 val ZERO = F.getSpecialReg "ZERO"
 val RV = F.getSpecialReg "RV"
+val SP = F.getSpecialReg "SP"
 
 fun codegen frame stm =
     let val ilist = ref []
@@ -205,16 +206,23 @@ fun codegen frame stm =
                     end
                 val calldefs = F.getSpecialRegs "calldefs"
                 val r = Temp.newtemp()
-                val insns = [A.OPER {assem=MA.genJ("jal", label),
-                                               dst=calldefs,
-                                               src=munchArgs(0, args),
-                                               jump=SOME([label])},
-                             A.OPER {assem=MA.genMove(r, RV),
-                                               dst=[r],
-                                               src=[RV],
-                                               jump=NONE}]
             in
-                map emit insns;
+                emit (A.OPER {assem=MA.genI("addi", [SP], [SP], ~4 * (length args)),
+                              dst=[SP],
+                              src=[SP],
+                              jump=NONE});
+                emit (A.OPER {assem=MA.genJ("jal", label),
+                              dst=calldefs,
+                              src=munchArgs(0, args),
+                              jump=SOME([label])});
+                emit (A.OPER {assem=MA.genMove(r, RV),
+                              dst=[r],
+                              src=[RV],
+                              jump=NONE});
+                emit (A.OPER {assem=MA.genI("addi", [SP], [SP], 4 * (length args)),
+                              dst=[SP],
+                              src=[SP],
+                              jump=NONE});
                 r
             end
           | munchExp (T.CALL(_)) =

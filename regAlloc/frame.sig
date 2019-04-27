@@ -24,6 +24,7 @@ sig
   val allocInFrame: frame -> int
   val exp : access -> Tree.exp -> Tree.exp
   val externalCall: string * Tree.exp list -> Tree.exp
+  val saveCallee: frame * Temp.temp list * register Temp.Table.table * Assem.instr list -> Assem.instr list
   val procEntryExit1: frame * Tree.exp -> frag
   val procEntryExit2: frame * Assem.instr list -> Assem.instr list
   val procEntryExit3: frame * Assem.instr list -> {prolog: string, body: Assem.instr list, epilog: string}

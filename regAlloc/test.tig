@@ -68,14 +68,32 @@ in
   if y-x > z then z+x else z+y
 end
 let
-  function f(x: int): int = x + 1
-in
-  f(1)
-end
-*/
-let
   function fact(x: int): int =
     if x = 0 then 1 else fact(x - 1) * x
 in
   fact(3)
+end
+*/
+let
+  function y(a: int, b: int, c: int, d: int, e: int): int = 5
+  function x(a: int): int =
+    let
+      var b: int := 3
+      var c: int := 3
+      var d: int := 3
+      var e: int := 3
+      var f: int := 3
+      var g: int := y(b, c, d, e, f)
+      var h: int := 3
+      var i: int := 3
+      var j: int := 3
+      var k: int := 3
+      var l: int := a + b + c + d + e + f + g + h + i + j + k + 3
+    in
+      e
+    end
+  var s: string := "hello world!"
+in
+  x(3);
+  print(s)
 end

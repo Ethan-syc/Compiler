@@ -4,6 +4,9 @@ structure Tr = Translate
 structure F = MipsFrame
 structure R = RegAlloc
 structure A = Assem
+structure S = Symbol
+
+val strings: string list ref = ref []
 
 fun emit out instrs =
     let (* todo: call procEntryExit3 *)
@@ -32,11 +35,11 @@ fun dataflow out instrs =
             end
     in
         if (!Log.loglevel) <= Log.DEBUG then
-            (TextIO.output(out, "============== Control Flow =============\n");
-             Flow.Graph.printGraph printFlowGraphNode out control;
+            (* (TextIO.output(out, "============== Control Flow =============\n"); *)
+            (*  Flow.Graph.printGraph printFlowGraphNode out control; *)
+            (TextIO.output(out, "============== Liveness =============\n");
+             Liveness.show(out, igraph);
              interference)
-             (* TextIO.output(out, "============== Liveness =============\n"); *)
-             (* Liveness.show(out, igraph); interference) *)
         else interference
     end
 
@@ -78,29 +81,36 @@ fun allocRegs (out, instrs, frame) =
 fun compileproc out (F.PROC{body,frame}, prevInstrs) =
     let val frameName = Symbol.name (F.name frame)
         val _ = print ("compiling " ^ frameName ^ "\n")
-        val stms = (Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body
+        val stms = tl ((Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body)
         val _ = if (!Log.loglevel) <= Log.DEBUG then
                     (TextIO.output(out, "============== Tree (" ^ frameName ^ ") ==============\n");
                      app (fn s => Printtree.printtree(out,s)) stms)
                 else ()
-        val entryExit = fn (instrs) => F.procEntryExit2(frame, instrs)
         val codegen = MipsGen.codegen frame
-        val instrs = entryExit(List.concat(map codegen stms))
+        val instrs = F.procEntryExit2(frame, (List.concat(map codegen stms)))
         val _ = emit out instrs
         val (interference, allocation) = allocRegs (out, instrs, frame)
         val temps = map KeyGraph.getNodeID (KeyGraph.nodes interference)
+        val instrs = F.saveCallee (frame, temps, allocation, instrs)
         val _ = if (!Log.loglevel) <= Log.DEBUG then
                     R.showAllocations(allocation, temps, out)
                 else [()]
+
         val format0 = FormatAssem.format(MipsFrame.regToString(allocation))
+        val {prolog=prolog, body=_, epilog=epilog} = F.procEntryExit3(frame, instrs)
         fun printInstr (instr, i) =
-            (TextIO.output(out, Int.toString i ^ ": " ^ format0 instr); i + 1)
-        val _ = (TextIO.output(out, "============== Real Assembly =============\n");
-           foldl printInstr 0 instrs)
+            (* (TextIO.output(out, Int.toString i ^ ": " ^ format0 instr); i + 1) *)
+            (TextIO.output(out, format0 instr); i + 1)
+        val _ = ((* TextIO.output(out, "============== Real Assembly =============\n"); *)
+                 TextIO.output(out, prolog);
+                 foldl printInstr 0 instrs;
+                 TextIO.output(out, epilog))
     in
         prevInstrs@instrs
     end
-  | compileproc out (F.STRING(lab,s), instrs) = (TextIO.output(out, "\""^F.string(lab,s)^"\""); instrs)
+  | compileproc out (F.STRING(lab,s), instrs) =
+    (strings := (!strings)@[S.name lab ^ ": .asciiz \"" ^ s ^ "\""];
+     instrs)
 
 fun withOpenFile fname f =
     let val out = TextIO.openOut fname
@@ -110,6 +120,8 @@ fun withOpenFile fname f =
 
 fun compile filename =
     let val _ = Tr.frags := []
+        val _ = strings := []
+        val _ = Log.loglevel := Log.ERROR
         val out = TextIO.openOut (filename ^ ".s")
         val absyn = Parse.parse filename
         val _ = if (!Log.loglevel) <= Log.DEBUG then
@@ -117,7 +129,10 @@ fun compile filename =
                      PrintAbsyn.print(out, absyn))
                 else ()
         val frags = (Temp.reset(); FindEscape.findEscape absyn; Semant.transProg absyn)
+        val _ = TextIO.output(out, ".text\n")
         val instrs = foldl (compileproc out) [] frags
+        val _ = TextIO.output(out, ".data\n")
+        val _ = map (fn s => TextIO.output(out, s)) (!strings)
     in
         TextIO.closeOut out
     end

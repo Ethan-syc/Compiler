@@ -59,4 +59,7 @@ fun relop T.EQ = "EQ"
   | relop T.UGT = "UGT"
   | relop T.UGE = "UGE"
 
+fun i2s i =
+    if i < 0 then "-" ^ Int.toString (~i) else Int.toString i
+
 end

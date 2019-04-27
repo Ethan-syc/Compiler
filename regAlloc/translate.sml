@@ -13,6 +13,7 @@ struct
 structure A = Absyn
 structure T = Tree
 structure F = MipsFrame
+structure S = Symbol
 fun err(pos,message) = ErrorMsg.error pos message
 
 datatype exp = Ex of Tree.exp
@@ -72,9 +73,14 @@ fun newLevel {parent=level, name=name, formals} =
     end
 
 fun formals level =
-    case level of OUTERMOST => []
-                | INNER {frame, parent, unique} =>
-                  foldl (fn(FrameAccess, curResult) => (level, FrameAccess)::curResult) [] (F.formals frame)
+    case level of INNER {frame, parent, unique} =>
+                  let val accesses = F.formals frame
+                  in
+                      map (fn access => (level, access)) (tl accesses)
+                  end
+                | OUTERMOST =>
+                  (Log.error("Attempted to access formals of OUTERMOST");
+                   raise Compiler)
 
 fun allocLocal level escape =
     case level of OUTERMOST =>
@@ -217,10 +223,16 @@ fun transCall (curLevel, label, funcLevel, args) =
                       (case curLevel of INNER {frame=curFrame, parent=parent, unique=curUnique} =>
                                         (* If in the same level or self-recursion *)
                                         if curUnique = decUnique orelse (#label curFrame) = (#label decFrame)
-                                        then Ex(T.CALL(T.NAME label, (T.MEM(T.TEMP F.FP)::(map unEx args))))
+                                        then
+                                            (Log.info(S.name (#label curFrame) ^ " calling same-level function " ^ S.name label);
+                                             Ex(T.CALL(T.NAME label, (T.MEM(T.TEMP F.FP)::(map unEx args)))))
+                                        (* If calling N-level outer function *)
                                         else if depth(curLevel) > depth(funcLevel)
                                         then Ex(T.CALL(T.NAME label, (followLink(parent, funcLevel)::(map unEx args))))
-                                        else Ex(T.CALL(T.NAME label, ((T.TEMP F.FP)::(map unEx args))))
+                                        (* If calling inner function *)
+                                        else
+                                            (Log.info(S.name (#label curFrame) ^ " calling inner function " ^ S.name label);
+                                             Ex(T.CALL(T.NAME label, ((T.TEMP F.FP)::(map unEx args)))))
                                       | OUTERMOST => (Log.error("Compiler error: attempting to call in OUTERMOST"); raise Compiler))
 
 fun genMove offset from (exp, moves) =

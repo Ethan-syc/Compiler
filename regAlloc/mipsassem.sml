@@ -25,7 +25,7 @@ fun genR (name: string, dst: Temp.temp list, src: Temp.temp list, shamt: int opt
             val rd = format(hd dst)
             val rt = format(hd src)
         in
-            name ^ " $" ^ rd ^ ", $" ^ rt ^ ", " ^ Int.toString shamt ^ "\n"
+            name ^ " $" ^ rd ^ ", $" ^ rt ^ ", " ^ Utils.i2s shamt ^ "\n"
         end
     else if Utils.inList(["jr", "mthi", "mtlo"], name)
     then
@@ -56,20 +56,20 @@ fun genI (name, dst: Temp.temp list, src: Temp.temp list, imm: int) format =
         let val rt = format(hd dst)
             val rs = format(hd src)
         in
-            name ^ " $" ^ rt ^ ", $" ^ rs ^ ", " ^ Int.toString imm ^ "\n"
+            name ^ " $" ^ rt ^ ", $" ^ rs ^ ", " ^ Utils.i2s imm ^ "\n"
         end
     else if Utils.inList(["lui"], name)
     then
         let val rt = format(hd dst)
         in
-            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "\n"
+            name ^ " $" ^ rt ^ ", " ^ Utils.i2s imm ^ "\n"
         end
     else if Utils.inList(["lb", "lh", "lw", "lbu", "lhu"], name)
     then
         let val rt = format(hd dst)
             val rs = format(hd src)
         in
-            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")" ^ "\n"
+            name ^ " $" ^ rt ^ ", " ^ Utils.i2s imm ^ "($" ^ rs ^ ")" ^ "\n"
         end
     else if Utils.inList(["sb", "sh", "sw"], name)
     then
@@ -77,7 +77,7 @@ fun genI (name, dst: Temp.temp list, src: Temp.temp list, imm: int) format =
         let val rt = format(hd src)
             val rs = format(hd (tl src))
         in
-            name ^ " $" ^ rt ^ ", " ^ Int.toString imm ^ "($" ^ rs ^ ")" ^ "\n"
+            name ^ " $" ^ rt ^ ", " ^ Utils.i2s imm ^ "($" ^ rs ^ ")" ^ "\n"
         end
     else
         (Log.error("Compiler error: unknown I-instruction: " ^ name);
