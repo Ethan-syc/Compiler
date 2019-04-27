@@ -14,7 +14,7 @@ Book: Modern Compiler Implementation in ML ©1998 by Andrew W. Appel
 |Parsing |2/14|:white_check_mark:|
 |Semantic Analysis |3/7|:white_check_mark:|
 |Frame Analysis and Intermediate Representation |3/25|:white_check_mark:|
-|Instruction Selection |4/1|:cold_sweat:|
-|Liveness Analysis |4/9|:cold_sweat:|
-|Register Allocation | 4/18|:cold_sweat:|
+|Instruction Selection |4/1|:white_check_mark:|
+|Liveness Analysis |4/9|:white_check_mark:|
+|Register Allocation | 4/18|:white_check_mark:|
 |Working compiler, produces assembly |4/24|:cold_sweat:|
