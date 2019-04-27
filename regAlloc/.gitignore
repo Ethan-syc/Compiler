@@ -4,6 +4,9 @@
 *.s
 tc
 
+!runtimele.s
+!sysspim.s
+
 # Emacs
 *~
 \#*\#
