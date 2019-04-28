@@ -793,5 +793,27 @@ tig_checkNil:
 tigcn_fail:
         la          $a0 tigcn_npe
         jal         tig_printz
+        j           exit
         .data
 tigcn_npe: .asciiz  "Null pointer exception"
+        .text
+tig_printInt:
+        # $a0: integer to print
+        addi        $sp, $sp, -4
+        sw          $ra, 0($sp)
+        li          $v0, 1
+        syscall
+        lw          $ra, 0($sp)
+        addi        $sp, $sp, 4
+        jr          $ra
+        .end tig_printInt
+tig_readInt:
+        # return: $v0 the integer read
+        addi        $sp, $sp, -4
+        sw          $ra, 0($sp)
+        li          $v0, 5
+        syscall
+        lw          $ra, 0($sp)
+        addi        $sp, $sp, 4
+        jr          $ra
+        .end tig_readInt

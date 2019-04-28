@@ -95,7 +95,7 @@ fun followLink (curLevel, targetLevel) =
                      (case targetLevel of OUTERMOST =>
                                           (Log.error("Compiler error: OUTERMOST has no static link"); raise Compiler)
                                         | INNER {frame=targetFrame, parent=_, unique=targetUnique} =>
-                                          if curUnique = targetUnique
+                                          if curUnique = targetUnique orelse (depth curLevel) = (depth targetLevel)
                                           then T.MEM(T.TEMP F.FP)
                                           else T.MEM(followLink(parent, targetLevel)))
 fun simpleVar ((decLevel: level, access: F.access), useLevel: level) =
@@ -131,10 +131,10 @@ fun transWhile (body, cond, breakLabel) =
         val l1 = Temp.newlabel()
     in
         Nx(Utils.seq[c(l1, breakLabel),
-               T.LABEL l1,
-               s,
-               c(l1, breakLabel),
-               T.LABEL breakLabel])
+                     T.LABEL l1,
+                     s,
+                     c(l1, breakLabel),
+                     T.LABEL breakLabel])
     end
 
 fun transFor (loopVar, starte, ende, body, breakLabel) =
@@ -222,7 +222,7 @@ fun transCall (curLevel, label, funcLevel, args) =
                     | INNER {frame=decFrame, parent=_, unique=decUnique} =>
                       (case curLevel of INNER {frame=curFrame, parent=parent, unique=curUnique} =>
                                         (* If in the same level or self-recursion *)
-                                        if curUnique = decUnique orelse (#label curFrame) = (#label decFrame)
+                                        if curUnique = decUnique orelse (depth curLevel) = (depth funcLevel)
                                         then
                                             (Log.info(S.name (#label curFrame) ^ " calling same-level function " ^ S.name label);
                                              Ex(T.CALL(T.NAME label, (T.MEM(T.TEMP F.FP)::(map unEx args)))))
@@ -319,6 +319,22 @@ fun transStringCompare (s1, s2) =
                             T.MOVE(T.TEMP t2, T.CALL(s2, [])),
                             T.MOVE(T.TEMP result, F.externalCall("tig_stringCompare", [T.TEMP t1, T.TEMP t2]))],
                   T.TEMP result))
+    end
+
+fun transStringEqual (s1, s2, oper) =
+    let
+        val s1 = unEx s1
+        val s2 = unEx s2
+        val result = Temp.newtemp()
+        val stm = T.MOVE(T.TEMP result, F.externalCall("tig_stringEqual", [s1, s2]))
+    in
+        case oper
+         of A.EqOp => Ex(T.ESEQ(stm, T.TEMP result))
+          | A.NeqOp => Ex(T.ESEQ(Utils.seq[stm,
+                                          T.MOVE(T.TEMP result, T.BINOP(T.MINUS, T.CONST 1, T.TEMP result))],
+                                 T.TEMP result))
+          | _ => (Log.error("String comparison should use stringCompare, not binary operators");
+                  raise Compiler)
     end
 
 fun transIntCompare ltOp gtOp (i1, i2) =

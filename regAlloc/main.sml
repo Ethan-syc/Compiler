@@ -124,7 +124,7 @@ fun withOpenFile fname f =
 fun compile filename =
     let val _ = Tr.frags := []
         val _ = strings := []
-        val _ = Log.loglevel := Log.ERROR
+        val _ = Log.loglevel := Log.INFO
         val _ = Log.debug("Compiling " ^ filename)
         val out = TextIO.openOut ("out/" ^ OS.Path.file filename ^ ".s")
         val absyn = Parse.parse filename
@@ -133,6 +133,7 @@ fun compile filename =
                      PrintAbsyn.print(out, absyn))
                 else ()
         val frags = (Temp.reset(); FindEscape.findEscape absyn; Semant.transProg absyn)
+        val _ = TextIO.output(out, "# file=" ^ filename ^ "\n")
         val _ = TextIO.output(out, ".text\n")
         val instrs = foldl (compileproc out) [] frags
         val _ = TextIO.output(out, ".data\n")

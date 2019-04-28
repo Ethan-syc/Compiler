@@ -17,8 +17,9 @@ fun symbolCompare (a, b) = String.compare(S.name a, S.name b)
 structure Set = BinarySetFn(struct type ord_key = S.symbol
                                    val compare = symbolCompare
                             end)
-
-fun err(pos,message) = ErrorMsg.error pos message
+exception Cycle
+val errorOccurred = ref false
+fun err(pos,message) = (errorOccurred := true; ErrorMsg.error pos message)
 
 fun errAndBottom(pos, exp, message) = (err(pos, message); {exp=exp, ty=TY.BOTTOM})
 
@@ -76,10 +77,10 @@ fun checkRecord (offset, symbol, pos, l) =
    ty1 is the expected type, ty2 is the actual type, return bool *)
 fun doCheckSameType (ty1, ty2, pos) =
     let
-        (* val ty1 = case ty1 of TY.PENDING(func) => func() *)
-        (*                     | ty => ty *)
-        (* val ty2 = case ty2 of TY.PENDING(func) => func() *)
-        (*                     | ty => ty *)
+        val ty1 = case ty1 of TY.PENDING(func) => func()
+                            | ty => ty
+        val ty2 = case ty2 of TY.PENDING(func) => func()
+                            | ty => ty
     in
         case ty1 of TY.RECORD(_, ty1Unique) =>
                     (case ty2 of TY.RECORD(_, ty2Unique) =>
@@ -160,7 +161,6 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                     oper = A.GeOp)
                 then
                     let
-
                         val left = doCheckSameType(TY.INT, leftTy, pos)
                         val right = doCheckSameType(TY.INT, rightTy, pos)
                         val _ = if (not left) orelse (not right)
@@ -173,8 +173,10 @@ fun transExp (venv: venvType, tenv:tenvType, exp:A.exp, level: TR.level, break: 
                 else (* oper = EqOp orelse oper = NeqOp *)
                     let
                         val _ = doCheckSameType(leftTy, rightTy, pos)
+                        val exp = case leftTy of TY.STRING => TR.transStringEqual(leftExp, rightExp, oper)
+                                               | _ => TR.transBinOp(leftExp, rightExp, oper)
                     in
-                        {exp=TR.transBinOp(leftExp, rightExp, oper), ty=TY.INT}
+                        {exp=exp, ty=TY.INT}
                     end
             end
           | trexp (A.VarExp var) = trvar(var)
@@ -664,7 +666,6 @@ and transTy(venv, tenv, decs) =
              of A.NameTy(symbol, _) => S.enter(m, name, symbol)
               | A.ArrayTy(symbol, _) => S.enter(m, name, symbol)
               | _ => m
-        exception Cycle
         fun checkTypeCycle m {name, ty, pos} =
             let
                 fun helper (name, l) =
@@ -681,15 +682,18 @@ and transTy(venv, tenv, decs) =
                 (helper(name, []); false)
             end
         fun checkTypeDec (dec, {venv, tenv}) =
-            {venv=venv, tenv=S.enter(tenv, #name dec, processTypeDec(dec))}
-        val result = foldl checkTypeDec {venv=venv, tenv=tenv} decs
+            let val ty = processTypeDec(dec)
+                val _ = case ty of TY.PENDING(func) => func()
+                                 | _ => TY.BOTTOM
+            in
+                {venv=venv, tenv=S.enter(tenv, #name dec, ty)}
+            end
         val typeMap = foldl makeTypeMap S.empty decs
-        val cycleDetected = Utils.anyOf (map (checkTypeCycle typeMap) decs) handle Cycle => true
-        (* check every dec onece after we add all the pending ty into the new tenv to make sure they can resolve correctly *)
-
+        val _ = map (checkTypeCycle typeMap) decs
     in
-        result
+        foldl checkTypeDec {venv=venv, tenv=tenv} decs
     end
+    handle Cycle => {venv=venv, tenv=tenv}
 
 
 fun transProg (AST_expression:A.exp) =

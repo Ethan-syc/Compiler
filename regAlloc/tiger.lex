@@ -103,6 +103,7 @@ whitespace=[ \012\009\n];
 
 <INITIAL>"/*" =>(commentDepth := !commentDepth + 1; gotoState("INITIAL", "COMMENT"); YYBEGIN COMMENT; continue());
 <INITIAL>"*/" =>(err(yypos, "unexpected comment terminator"); continue());
+<COMMENT>"/*" =>(commentDepth := !commentDepth + 1; continue());
 <COMMENT>"*/" =>(commentDepth := !commentDepth - 1;
                  if !commentDepth = 0 then
                      let

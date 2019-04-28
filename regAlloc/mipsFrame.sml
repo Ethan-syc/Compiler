@@ -92,7 +92,7 @@ val specialRegs = [
 val tempMap = foldl addSpecialReg Tab.empty specialRegs
 
 structure StringMap = BinaryMapFn(struct type ord_key = string
-                                   val compare = String.compare end)
+                                         val compare = String.compare end)
 val reverseTempMap = foldl (fn ((temp, name), map) => StringMap.insert(map, name, temp)) StringMap.empty specialRegs
 
 fun string (label, s) = (Symbol.name label) ^ "\n" ^ s ^ "\n"
@@ -103,6 +103,10 @@ fun arg 0 = T.TEMP(A0)
   | arg 3 = T.TEMP(A3)
   | arg n = T.MEM(T.BINOP(T.PLUS, T.TEMP(SP), T.CONST(4 * n)))
 
+fun exp access treeExp =
+    case access of InReg(temp) => T.TEMP(temp)
+                 | InFrame(offset) => T.MEM(T.BINOP(T.PLUS, treeExp, T.CONST(offset)))
+
 fun newFrame {name: Temp.label, formals} =
     let
         fun buildFormals (i, []) = []
@@ -111,10 +115,13 @@ fun newFrame {name: Temp.label, formals} =
             (InReg(Temp.newtemp()))::(buildFormals (i + 4, rest))
           | buildFormals (i, true::rest) =
             (InFrame i)::(buildFormals (i + 4, rest))
+        fun calleeArg i =
+            if i < 4 then arg i
+            else T.MEM(T.BINOP(T.PLUS, T.TEMP(FP), T.CONST(4 * i)))
         fun genMoves (i, []) = []
           | genMoves (i, access::rest) =
-            case access of InReg(temp) => T.MOVE(T.TEMP temp, arg i)::genMoves(i + 1, rest)
-                         | InFrame(offset) => T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP FP, T.CONST offset)), arg i)::genMoves(i + 1, rest)
+            case access of InReg(temp) => T.MOVE(T.TEMP temp, calleeArg i)::genMoves(i + 1, rest)
+                         | InFrame(offset) => T.MOVE(T.MEM(T.BINOP(T.PLUS, T.TEMP FP, T.CONST offset)), calleeArg i)::genMoves(i + 1, rest)
         val formals' = buildFormals (0, formals)
         val moves = genMoves(0, formals')
     in
@@ -157,9 +164,6 @@ fun regToString table reg =
       | _ =>
         (case Tab.look(tempMap, reg) of SOME(s) => s
                                       | _ => Temp.makestring reg)
-fun exp access treeExp =
-    case access of InReg(temp) => T.TEMP(temp)
-                 | InFrame(offset) => T.MEM(T.BINOP(T.PLUS, treeExp, T.CONST(offset)))
 fun externalCall (s, args) =
     T.CALL(T.NAME(Temp.namedlabel s), args)
 fun procEntryExit1 (frame, body) =
@@ -170,13 +174,13 @@ fun procEntryExit1 (frame, body) =
     end
 
 fun saveCallee (frame, allTemps, allocation, instrs) =
-    let fun find (temp, temps): Temp.temp list =
+    let fun find (temp, temps) =
             case Tab.look(allocation, temp)
              of SOME(color) =>
                 (case StringMap.find(reverseTempMap, color)
                   of SOME(colorTemp) =>
                      if Utils.inList(calleesaves, colorTemp)
-                     then colorTemp::temps
+                     then IntBinarySet.add(temps, colorTemp)
                      else temps)
               | NONE => temps
         fun genInst (inst, temp, imm) format =
@@ -195,7 +199,7 @@ fun saveCallee (frame, allTemps, allocation, instrs) =
                      dst=[temp],
                      src=[FP],
                      jump=NONE})::instrs
-        val toSave = foldl find [] allTemps
+        val toSave = IntBinarySet.listItems(foldl find IntBinarySet.empty allTemps)
         val _ = Log.info("Frame "
                          ^ S.name (#label frame)
                          ^ " used "

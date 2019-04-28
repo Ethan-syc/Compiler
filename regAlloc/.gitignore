@@ -3,6 +3,7 @@
 *.grm.*
 *.s
 tc
+out/
 
 !runtimele.s
 !sysspim.s

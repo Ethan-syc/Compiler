@@ -206,11 +206,14 @@ fun codegen frame stm =
                     end
                 val calldefs = F.getSpecialRegs "calldefs"
                 val r = Temp.newtemp()
+                val len = length args
             in
-                emit (A.OPER {assem=MA.genI("addi", [SP], [SP], ~4 * (length args)),
-                              dst=[SP],
-                              src=[SP],
-                              jump=NONE});
+                if len > 0 then
+                    emit (A.OPER {assem=MA.genI("addi", [SP], [SP], ~4 * (length args)),
+                                  dst=[SP],
+                                  src=[SP],
+                                  jump=NONE})
+                else ();
                 emit (A.OPER {assem=MA.genJ("jal", label),
                               dst=calldefs,
                               src=munchArgs(0, args),
@@ -219,10 +222,12 @@ fun codegen frame stm =
                               dst=[r],
                               src=[RV],
                               jump=NONE});
-                emit (A.OPER {assem=MA.genI("addi", [SP], [SP], 4 * (length args)),
-                              dst=[SP],
-                              src=[SP],
-                              jump=NONE});
+                if len > 0 then
+                    emit (A.OPER {assem=MA.genI("addi", [SP], [SP], 4 * (length args)),
+                                  dst=[SP],
+                                  src=[SP],
+                                  jump=NONE})
+                else ();
                 r
             end
           | munchExp (T.CALL(_)) =

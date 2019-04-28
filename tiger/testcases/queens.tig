@@ -9,18 +9,20 @@ let
     var col := intArray [ N ] of 0
     var diag1 := intArray [N+N-1] of 0
     var diag2 := intArray [N+N-1] of 0
+    var numSol := 0
 
-    function printboard() =
-       (for i := 0 to N-1
+    function printboard(sol: int) =
+       (print("Solution "); printInt(sol); print("\n");
+       for i := 0 to N-1
 	 do (for j := 0 to N-1
 	      do print(if col[i]=j then " O" else " .");
 	     print("\n"));
          print("\n"))
 
     function try(c:int) =
-(   for i:= 0 to c do print("."); print("\n"); flush();
+(/*   for i:= 0 to c do print("."); print("\n"); flush();*/
      if c=N
-     then printboard()
+     then (numSol := numSol + 1; printboard(numSol))
      else for r := 0 to N-1
 	   do if row[r]=0 & diag1[r+c]=0 & diag2[r+7-c]=0
 	           then (row[r]:=1; diag1[r+c]:=1; diag2[r+7-c]:=1;
