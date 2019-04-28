@@ -80,7 +80,6 @@ fun allocRegs (out, instrs, frame) =
 
 fun compileproc out (F.PROC{body,frame}, prevInstrs) =
     let val frameName = Symbol.name (F.name frame)
-        val _ = print ("compiling " ^ frameName ^ "\n")
         val stms = tl ((Canon.traceSchedule o Canon.basicBlocks o Canon.linearize) body)
         (* val stms = List.take(stms, length stms - 2) *)
             val _ = if (!Log.loglevel) <= Log.DEBUG then
@@ -124,7 +123,6 @@ fun withOpenFile fname f =
 fun compile filename =
     let val _ = Tr.frags := []
         val _ = strings := []
-        val _ = Log.loglevel := Log.INFO
         val _ = Log.debug("Compiling " ^ filename)
         val out = TextIO.openOut ("out/" ^ OS.Path.file filename ^ ".s")
         val absyn = Parse.parse filename
@@ -144,6 +142,7 @@ fun compile filename =
         val _ = TextIO.output(out, runtime)
         val _ = TextIO.output(out, "################# SYSTEM ###############\n");
         val _ = TextIO.output(out, sysspim)
+        val _ = print("the MIPS assembly code is located at ./out/" ^ OS.Path.file filename ^ ".s\n")
     in
         TextIO.closeOut out
     end

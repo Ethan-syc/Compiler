@@ -78,6 +78,7 @@ fun color {interference, initial, spillCost, registers} =
                     val result = if allPreColored then initial
                                  else
                                      let val min = Utils.min spillCost temps
+                                     val _ = print("spill!")
                                      in
                                          raise spill min
                                      end

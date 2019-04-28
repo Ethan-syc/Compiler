@@ -10,7 +10,7 @@ val WARNING = 4
 val ERROR = 5
 val NOLOG = 6
 (* todo: change this to disable logging *)
-val loglevel = ref DEBUG
+val loglevel = ref ERROR
 
 fun loglevelToName 1 = "DEBUG"
   | loglevelToName 2 = "VERBOSE"
