@@ -19,7 +19,7 @@ fun codegen frame stm =
           | munchStm (T.JUMP(T.NAME lab, labs)) = emit(A.OPER {assem=MA.genJ("j", lab), dst=[], src=[], jump=SOME(labs)})
           | munchStm (T.JUMP(_)) = Log.debug("Compiler error: jump instruction without label")
           | munchStm (T.CJUMP(T.LE, e, T.CONST 0, l1, l2) |
-                      T.CJUMP(T.GT, T.CONST 0, e, l1, l2)) =
+                      T.CJUMP(T.GE, T.CONST 0, e, l1, l2)) =
             (* MIPS: blez e, l1 *)
             let val e = munchExp(e)
             in
@@ -29,7 +29,7 @@ fun codegen frame stm =
                              jump=SOME([l1])})
             end
           | munchStm (T.CJUMP(T.GT, e, T.CONST 0, l1, l2) |
-                      T.CJUMP(T.LE, T.CONST 0, e, l1, l2)) =
+                      T.CJUMP(T.LT, T.CONST 0, e, l1, l2)) =
             (* MIPS: bgtz e, l1 *)
             let val e = munchExp(e)
             in
@@ -55,7 +55,7 @@ fun codegen frame stm =
                              jump=SOME([l1])})
             end
           | munchStm (T.CJUMP(T.LT, e1, T.CONST i, l1, l2) |
-                      T.CJUMP(T.GE, T.CONST i, e1, l1, l2)) =
+                      T.CJUMP(T.GT, T.CONST i, e1, l1, l2)) =
             let val e1 = munchExp e1
                 val t = Temp.newtemp()
             in

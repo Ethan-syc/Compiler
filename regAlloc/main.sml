@@ -142,7 +142,7 @@ fun compile filename =
         val _ = TextIO.output(out, runtime)
         val _ = TextIO.output(out, "################# SYSTEM ###############\n");
         val _ = TextIO.output(out, sysspim)
-        val _ = print("the MIPS assembly code is located at ./out/" ^ OS.Path.file filename ^ ".s\n")
+        val _ = print("If no Compiler error(s) produced above, then the MIPS assembly code is located at ./out/" ^ OS.Path.file filename ^ ".s\n")
     in
         TextIO.closeOut out
     end
