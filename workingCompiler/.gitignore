@@ -1,0 +1,19 @@
+.cm/
+*.lex.sml
+*.grm.*
+*.s
+tc
+out/
+
+!runtimele.s
+!sysspim.s
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
