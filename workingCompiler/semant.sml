@@ -18,8 +18,7 @@ structure Set = BinarySetFn(struct type ord_key = S.symbol
                                    val compare = symbolCompare
                             end)
 exception Cycle
-val errorOccurred = ref false
-fun err(pos,message) = (errorOccurred := true; ErrorMsg.error pos message)
+fun err(pos,message) = ErrorMsg.error pos message
 
 fun errAndBottom(pos, exp, message) = (err(pos, message); {exp=exp, ty=TY.BOTTOM})
 

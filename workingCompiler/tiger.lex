@@ -37,8 +37,6 @@ fun eof() =
         (* val _ = print("[#linePos#] ")
         val _ = map pr (!linePos)
         val _ = print("\n") *)
-        val _ = lineNum := 1
-        val _ = linePos := [1]
     in
         if (!commentDepth <> 0) then err(pos, "unmatched comment depth at EOF") else ();
         if (!stringOpenState <> 0) then err(pos, "string is still open at EOF") else ();

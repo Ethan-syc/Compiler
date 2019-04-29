@@ -6,8 +6,9 @@ sig
     val linePos : int list ref
     val sourceStream : TextIO.instream ref
     val error : int -> string -> unit
-    exception Error
+    exception Error of string
     val impossible : string -> 'a   (* raises Error *)
+    val die: unit -> unit
     val reset : unit -> unit
 end
 
@@ -26,7 +27,7 @@ struct
 		 linePos:=[1];
 		 sourceStream:=TextIO.stdIn)
 
-  exception Error
+  exception Error of string
 
   fun error pos (msg:string) =
       let fun look(a::rest,n) =
@@ -44,10 +45,13 @@ struct
 	  print "\n"
       end
 
+  fun die () = if (!anyErrors) then
+                   raise Error ((!fileName) ^ ": Compilation failed. One or more errors have occurred")
+               else ()
+
   fun impossible msg =
       (app print ["Error: Compiler bug: ",msg,"\n"];
        TextIO.flushOut TextIO.stdOut;
-       raise Error)
+       raise Error "Compiler bug")
 
 end  (* structure ErrorMsg *)
-  

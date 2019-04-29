@@ -7,6 +7,7 @@ structure A = Assem
 structure S = Symbol
 
 val strings: string list ref = ref []
+exception Compiler of string
 
 fun emit out instrs =
     let (* todo: call procEntryExit3 *)
@@ -120,17 +121,25 @@ fun withOpenFile fname f =
        handle e => (TextIO.closeOut out; raise e)
     end
 
+fun reset () =
+    (Tr.frags := [];
+     strings := [];
+     Log.loglevel := Log.INFO;
+     ErrorMsg.reset();
+     Temp.reset())
+
 fun compile filename =
-    let val _ = Tr.frags := []
-        val _ = strings := []
+    let val _ = reset()
         val _ = Log.debug("Compiling " ^ filename)
         val out = TextIO.openOut ("out/" ^ OS.Path.file filename ^ ".s")
         val absyn = Parse.parse filename
+        val _ = ErrorMsg.die()
         val _ = if (!Log.loglevel) <= Log.DEBUG then
                     (TextIO.output(out, "================ AST ===============\n");
                      PrintAbsyn.print(out, absyn))
                 else ()
-        val frags = (Temp.reset(); FindEscape.findEscape absyn; Semant.transProg absyn)
+        val frags = (FindEscape.findEscape absyn; Semant.transProg absyn)
+        val _ = ErrorMsg.die()
         val _ = TextIO.output(out, "# file=" ^ filename ^ "\n")
         val _ = TextIO.output(out, ".text\n")
         val instrs = foldl (compileproc out) [] frags
@@ -142,10 +151,11 @@ fun compile filename =
         val _ = TextIO.output(out, runtime)
         val _ = TextIO.output(out, "################# SYSTEM ###############\n");
         val _ = TextIO.output(out, sysspim)
-        val _ = print("If no Compiler error(s) produced above, then the MIPS assembly code is located at ./out/" ^ OS.Path.file filename ^ ".s\n")
     in
         TextIO.closeOut out
     end
+    handle ErrorMsg.Error msg => print(msg ^ "\n")
+         | e => print(exnMessage e)
 
 fun main(args) =
     if (length args) < 1 then

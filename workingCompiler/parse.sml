@@ -14,6 +14,6 @@ struct
 	  val (absyn, _) = TigerP.parse(30,lexer,parseerror,())
        in TextIO.closeIn file;
 	   absyn
-      end handle LrParser.ParseError => raise ErrorMsg.Error
+      end handle LrParser.ParseError => raise ErrorMsg.Error "Parse error"
 
 end
