@@ -29,8 +29,8 @@ fun dataflow out instrs =
         val Flow.FGRAPH {control=control} = flowgraph
         fun printFlowGraphNode (nodeID, info) =
             let val {def, use, ismove} = info
-                val def = "[" ^ Utils.join ", " (map Int.toString def) ^ "]"
-                val use = "[" ^ Utils.join ", " (map Int.toString use) ^ "]"
+                val def = ListFormat.listToString Int.toString def
+                val use = ListFormat.listToString Int.toString use
             in
                 nodeID ^ ": Def: " ^ def ^ ", Use: " ^ use
             end
@@ -124,13 +124,13 @@ fun withOpenFile fname f =
 fun reset () =
     (Tr.frags := [];
      strings := [];
-     Log.loglevel := Log.INFO;
      ErrorMsg.reset();
      Temp.reset())
 
 fun compile filename =
     let val _ = reset()
         val _ = Log.debug("Compiling " ^ filename)
+        val _ = (OS.FileSys.mkDir "out") handle SysErr => () (* Dir exists ignore *)
         val out = TextIO.openOut ("out/" ^ OS.Path.file filename ^ ".s")
         val absyn = Parse.parse filename
         val _ = ErrorMsg.die()

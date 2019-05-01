@@ -62,4 +62,12 @@ fun relop T.EQ = "EQ"
 fun i2s i =
     if i < 0 then "-" ^ Int.toString (~i) else Int.toString i
 
+fun withOpenFile fname f =
+    let val out = TextIO.openOut fname
+    in (f out before TextIO.closeOut out)
+       handle e => (TextIO.closeOut out; raise e)
+    end
+
+fun emit out s = TextIO.output(out, s)
+
 end
